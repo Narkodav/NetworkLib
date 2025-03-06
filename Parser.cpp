@@ -186,172 +186,6 @@ namespace http
             (Message::TransferMethod::NONE, 0);
     }
 
-    //void Parser::parseBodyChunked(Socket& sock, Buffer& leftovers,
-    //    std::unique_ptr<Message>& message) //TODO
-    //{
-    //    //std::vector<char>& body = body;
-    //    //std::vector<char> tempBuffer(1024); // Small buffer for incoming data
-    //    //size_t bodySize = 0;  // Track actual data size in main buffer
-
-    //    //// First handle any existing data in the buffer from header parsing
-    //    //if (!body.empty()) {
-    //    //    size_t currentPos = 0;
-    //    //    while (currentPos < body.size()) {
-    //    //        // Find next chunk size line
-    //    //        auto lineEnd = std::search(body.begin() + currentPos,
-    //    //            body.end(),
-    //    //            "\r\n", "\r\n" + 2);
-
-    //    //        if (lineEnd == body.end()) {
-    //    //            // Incomplete chunk, move remaining data to start of buffer
-    //    //            std::memmove(body.data(),
-    //    //                body.data() + currentPos,
-    //    //                body.size() - currentPos);
-    //    //            body.resize(body.size() - currentPos);
-    //    //            break;
-    //    //        }
-
-    //    //        // Parse chunk size
-    //    //        std::string sizeStr(body.begin() + currentPos, lineEnd);
-    //    //        size_t chunkSize = std::stoull(sizeStr, nullptr, 16);
-
-    //    //        // Move past chunk size line
-    //    //        currentPos = (lineEnd - body.begin()) + 2;
-
-    //    //        // Check if we have the full chunk
-    //    //        if (currentPos + chunkSize + 2 > body.size()) {
-    //    //            // Incomplete chunk, move remaining data to start
-    //    //            std::memmove(body.data(),
-    //    //                body.data() + currentPos - 2,
-    //    //                body.size() - (currentPos - 2));
-    //    //            body.resize(body.size() - (currentPos - 2));
-    //    //            break;
-    //    //        }
-
-    //    //        // Move chunk data to final position
-    //    //        std::memmove(body.data() + bodySize,
-    //    //            body.data() + currentPos,
-    //    //            chunkSize);
-    //    //        bodySize += chunkSize;
-
-    //    //        // Skip chunk data and its CRLF
-    //    //        currentPos += chunkSize + 2;
-    //    //    }
-    //    //}
-
-    //    //// Now continue reading remaining chunks
-    //    //while (true) {
-    //    //    // Find the chunk size line ending in existing data
-    //    //    auto dataEnd = body.begin() + bodySize;
-    //    //    auto crlfPos = std::search(dataEnd, body.end(),
-    //    //        "\r\n", "\r\n" + 2);
-
-    //    //    // If we don't have a complete line, receive more
-    //    //    while (crlfPos == body.end()) {
-    //    //        auto bytesRead = m_socket.receive(tempBuffer.data(), tempBuffer.size());
-    //    //        if (bytesRead <= 0) {
-    //    //            throw std::runtime_error("Connection closed while reading chunk size");
-    //    //        }
-
-    //    //        // Append to main buffer
-    //    //        body.insert(body.end(),
-    //    //            tempBuffer.begin(),
-    //    //            tempBuffer.begin() + bytesRead);
-    //    //        crlfPos = std::search(dataEnd, body.end(),
-    //    //            "\r\n", "\r\n" + 2);
-    //    //    }
-
-    //    //    // Parse chunk size
-    //    //    std::string sizeStr(dataEnd, crlfPos);
-    //    //    size_t chunkSize = std::stoull(sizeStr, nullptr, 16);
-
-    //    //    // If chunk size is 0, we're done
-    //    //    if (chunkSize == 0) {
-    //    //        // Remove the final chunk marker and CRLF
-    //    //        body.resize(bodySize);
-    //    //        break;
-    //    //    }
-
-    //    //    // Move existing chunk data to the correct position (if any)
-    //    //    size_t availableData = body.end() - (crlfPos + 2);
-    //    //    size_t dataToMove = min(availableData, chunkSize);
-    //    //    if (dataToMove > 0) {
-    //    //        std::memmove(body.data() + bodySize,
-    //    //            crlfPos + 2,
-    //    //            dataToMove);
-    //    //    }
-
-    //    //    // Read remaining chunk data if needed
-    //    //    size_t remainingBytes = chunkSize - dataToMove;
-    //    //    while (remainingBytes > 0) {
-    //    //        auto bytesRead = m_socket.receive(tempBuffer.data(),
-    //    //            min(remainingBytes, tempBuffer.size()));
-    //    //        if (bytesRead <= 0) {
-    //    //            throw std::runtime_error("Connection closed while reading chunk data");
-    //    //        }
-
-    //    //        // Copy directly to the correct position in main buffer
-    //    //        std::memcpy(body.data() + bodySize + dataToMove,
-    //    //            tempBuffer.data(),
-    //    //            bytesRead);
-    //    //        remainingBytes -= bytesRead;
-    //    //        dataToMove += bytesRead;
-    //    //    }
-
-    //    //    bodySize += chunkSize;
-
-    //    //    // Read and discard chunk trailing CRLF
-    //    //    char crlf[2];
-    //    //    size_t crlfRead = 0;
-    //    //    while (crlfRead < 2) {
-    //    //        auto result = m_socket.receive(crlf + crlfRead, 2 - crlfRead);
-    //    //        if (result <= 0) {
-    //    //            throw std::runtime_error("Connection closed while reading chunk CRLF");
-    //    //        }
-    //    //        crlfRead += result;
-    //    //    }
-    //    //}
-
-    //    //// Resize the buffer to the actual data size
-    //    //body.resize(bodySize);
-    //}
-
-    //void Parser::parseBodyTransferSize(Socket& sock, Buffer& leftovers,
-    //    size_t contentLength, std::unique_ptr<Message>& message)
-    //{
-    //    std::vector<char> buffer(contentLength);
-    //    size_t retryCount = 0;
-    //    size_t bytesRead = buffer.size();
-
-    //    while (bytesRead < contentLength) {
-    //        auto result = m_socket.receive(body.data() + bytesRead, contentLength - bytesRead);
-    //        if (bytesRead == 0) {
-    //            std::cout << "Connection closed by client" << std::endl;
-    //            break;
-    //        }
-    //        else if (bytesRead < 0) {
-    //            auto error = Socket::getLastError();
-    //            if (error == Socket::Error::INTERRUPTED ||
-    //                error == Socket::Error::WOULD_BLOCK) {
-    //                if (++retryCount > MAX_RETRY_COUNT) {
-    //                    std::cerr << "Max retries exceeded" << std::endl;
-    //                    break;
-    //                }
-    //                // Exponential backoff: 10ms, 20ms, 40ms, 80ms, 160ms
-    //                std::this_thread::sleep_for(
-    //                    std::chrono::milliseconds(10 * (1 << (retryCount - 1)))
-    //                );
-    //                continue;
-    //            }
-    //            else {
-    //                std::cerr << "Error reading from socket: " << Socket::getErrorString(error) << std::endl;
-    //                break;
-    //            }
-    //        }
-    //        bytesRead += result;
-    //    }
-    //}
-
     std::unique_ptr<Message> Parser::parseHeader(Socket& sock, Buffer& leftovers)
     {
         leftovers.reserve(1024);
@@ -408,14 +242,34 @@ namespace http
         switch (methodAndLength.first)
         {
         case Message::TransferMethod::CONTENT_LENGTH:
-            message->getBody()->parseTransferSize(sock, leftovers, methodAndLength.second);
+            message->getBody()->parseTransferSize(sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
             break;
         case Message::TransferMethod::CHUNKED:
-            message->getBody()->parseChunked(sock, leftovers);
+            message->getBody()->parseChunked(sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
             break;
         default:
             break; //HTTP/1.1 only supports chunked or content length transfer methods
         }
     }
 
+    std::unique_ptr<Message> Parser::parseMessage(Socket& sock)
+    {
+        std::string leftovers;
+
+        try
+        {
+            std::unique_ptr<Message> message = parseHeader(sock, leftovers);
+
+
+            std::unique_ptr<Message::StringBody> body = std::make_unique<Message::StringBody>();
+
+            parseBody(sock, message, leftovers, std::move(body));
+
+            return message;
+        }
+        catch (std::exception& e)
+        {
+            std::cerr << "Error parsing message: " << e.what() << std::endl;
+        }
+    }
 }

@@ -350,7 +350,7 @@ namespace http
             HEAD,       // Same as GET but returns only headers
             POST,       // Submit data to be processed
             PUT,        // Upload a resource
-            DELETE_,     // Remove a resource
+            DELETE_,    // Remove a resource
             CONNECT,    // Establish a tunnel to the server
             OPTIONS,    // Describe communication options
             TRACE,      // Perform a message loop-back test
