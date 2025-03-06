@@ -1,65 +1,51 @@
 #pragma once
 #include "Socket.h"
 #include "IOContext.h"
+#include "Message.h"
 
 // takes a client socket a buffer and a io context returns an http request
 // doesn't actually store anything or have a state so its static
 
-class HTTPParser
+namespace http
 {
-	static inline const size_t MAX_RETRY_COUNT = 5;
-
-public:
-	template <size_t bufferSize>
-    static void assyncRead(Socket&& client, std::array<char, bufferSize>&& buffer,
-        IOContext& ioContext, std::function<void()> callback)
+    class Parser
     {
-        ioContext.post([&, sock = std::move(client), buf = std::move(buffer)]() {
-            read(sock, buf);
-            });
+    public:
+        using Buffer = std::string;
 
+        static inline const size_t MAX_RETRY_COUNT = 5;
+        static inline const size_t MAX_HEADER_SIZE = 1024 * 16; //16 KBs
+        static inline const size_t MAX_HEADER_NAME_LENGTH = 256;
+        static inline const size_t MAX_HEADER_VALUE_LENGTH = 8192;
+
+    private:
+        bool m_headersComplete = false;
+        Message::TransferMethod m_transferMethod = Message::TransferMethod::UNKNOWN;
+        size_t m_contentLength = 0;
+        size_t m_bodyBytesRead = 0;
+
+        std::unique_ptr<Message> parseFirstLine(std::stringstream& line); //returns a message of the needed type
+        bool parseHeaders(std::stringstream& headers, std::unique_ptr<Message>& message);
+
+        //stores bytes if used content length
+        std::pair<Message::TransferMethod, int> determineTransferMethod(std::unique_ptr<Message>& message);
+
+        //void parseBodyChunked(Socket& sock,
+        //    Buffer& leftovers, std::unique_ptr<Message>& message);
+
+        //void parseBodyTransferSize(Socket& sock, Buffer& leftovers,
+        //    size_t contentLength, std::unique_ptr<Message>& message);
+
+    public:
+
+
+        std::unique_ptr<Message> parseHeader(Socket& sock, Buffer& leftovers); //buffer will store leftovers
+
+        // bodyStorage will be moved to message and filled with body data (if any is present)
+        void parseBody(Socket& sock, std::unique_ptr<Message>& message,
+            Buffer& leftovers, std::unique_ptr<Message::Body>&& bodyStorage); 
+
+        //std::unique_ptr<Message> asyncParse(IOContext& ioContext, Socket& sock,
+        //    Buffer& buffer, std::function<void(Socket&&)> callback);
     };
-
-    template <size_t bufferSize>
-    static void read(Socket& client, std::array<char, bufferSize>& buffer)
-    {
-        int bytesRead = 0;
-        int retryCount = 0;
-
-        while (true) {
-            bytesRead = client.receive(buffer.data(), bufferSize);
-
-            if (bytesRead > 0) {
-                // Reset retry count on successful read
-                retryCount = 0;
-                std::cout.write(buffer.data(), bytesRead);
-                std::cout.flush();
-                std::fill(buffer.begin(), buffer.end(), 0);
-            }
-            else if (bytesRead == 0) {
-                std::cout << "Connection closed by client" << std::endl;
-                break;
-            }
-            else if (bytesRead < 0) {
-                auto error = Socket::getLastError();
-                if (error == Socket::Error::INTERRUPTED ||
-                error == Socket::Error::WOULD_BLOCK) {
-                    if (++retryCount > MAX_RETRY_COUNT) {
-                        std::cerr << "Max retries exceeded" << std::endl;
-                        break;
-                    }
-                    // Exponential backoff: 10ms, 20ms, 40ms, 80ms, 160ms
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(10 * (1 << (retryCount - 1)))
-                    );
-                    continue;
-                }
-                else {
-                    std::cerr << "Error reading from socket: " << Socket::getErrorString(error) << std::endl;
-                    break;
-                }
-            }
-        }
-    };
-};
-
+}

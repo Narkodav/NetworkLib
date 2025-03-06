@@ -82,6 +82,7 @@ public:
         {EINVAL, Error::INVALID_ARG}
     };
 #endif
+
     static constexpr int DEFAULT_BACKLOG = 4096;
 
 private:
@@ -240,6 +241,125 @@ public:
 #else
         return ::read(m_sockfd, buffer, len);
 #endif
+    }
+
+    /**
+ * @brief Continuously receives data from the socket until the handler indicates completion
+ *        or an error occurs.
+ *
+ * This function implements a flexible receiving loop that allows dynamic buffer management
+ * through a handler callback. The handler can control both where subsequent reads will be
+ * stored and when to stop receiving.
+ *
+ * @param buffer Initial buffer where received data will be stored
+ * @param len Size of the initial buffer
+ * @param maxRetryCount Maximum number of retry attempts for INTERRUPTED/WOULD_BLOCK errors
+ * @param handler Callback function that processes received data and controls further reads
+ *               The handler receives:
+ *               - char*& buffer: Reference to buffer pointer, can be modified to change
+ *                               where the next read will store data
+ *               - size_t& len: Reference to buffer length, can be modified to change
+ *                             the maximum bytes to read in next iteration
+ *               - size_t bytesRead: Number of bytes received in current read
+ *               - size_t receivedTotal: Total number of bytes received so far
+ *               Returns: bool indicating whether to continue receiving (true) or stop (false)
+ *
+ * @return Total number of bytes received across all successful reads
+ *
+ * @throws std::runtime_error if socket is invalid or connection errors occur
+ *
+ * @note The function implements exponential backoff for retry attempts, starting at 10ms
+ *       and doubling with each retry.
+ *
+ * Example usage:
+ * @code
+ * // Basic usage - accumulate data in a vector
+ * std::vector<char> data;
+ * char buffer[1024];
+ * socket.receiveLoop(buffer, sizeof(buffer), 5,
+ *     [&data](char*& buf, size_t& len, size_t bytesRead, size_t receivedTotal) {
+ *         // Append received data to vector
+ *         data.insert(data.end(), buf, buf + bytesRead);
+ *         std::cout << "Received " << receivedTotal << " bytes so far\n";
+ *         return true; // Continue receiving
+ *     });
+ *
+ * // Advanced usage - protocol parsing with varying buffer sizes
+ * Protocol protocol;
+ * char headerBuf[HEADER_SIZE];
+ * char* dataBuf = nullptr;
+ * size_t expectedDataSize = 0;
+ * bool headerReceived = false;
+ *
+ * socket.receiveLoop(headerBuf, HEADER_SIZE, 5,
+ *     [&](char*& buf, size_t& len, size_t bytesRead, size_t receivedTotal) {
+ *         if (!headerReceived) {
+ *             // Process header and allocate data buffer
+ *             expectedDataSize = protocol.parseHeader(headerBuf);
+ *             dataBuf = new char[expectedDataSize];
+ *             // Set up for data receive
+ *             buf = dataBuf;
+ *             len = expectedDataSize;
+ *             headerReceived = true;
+ *             return true;
+ *         } else {
+ *             // Process complete message
+ *             protocol.processData(dataBuf, bytesRead);
+ *             delete[] dataBuf;
+ *             return false; // Stop receiving
+ *         }
+ *     });
+ * @endcode
+ */
+
+    int receiveLoop(char* buffer, size_t len, size_t totalStart, size_t maxRetryCount,
+        std::function<bool(char*&, size_t&, size_t, size_t&)> handler) {
+        if (m_sockfd < 0) {
+            throw std::runtime_error("Client socket is not connected: " +
+                getLastErrorString());
+        }
+        size_t retryCount = 0;
+        size_t receivedTotal = totalStart;
+        bool shouldRead = true;
+
+        while (shouldRead) {
+
+#ifdef _WIN32
+            auto bytesRead = ::recv(m_sockfd, buffer, len, 0);
+#else
+            auto bytesRead = ::read(m_sockfd, buffer, len);
+#endif
+            if (bytesRead > 0) {
+                // Reset retry count on successful read
+                retryCount = 0;
+                receivedTotal += bytesRead;
+                shouldRead = handler(buffer, len, bytesRead, receivedTotal);
+            }
+            else if (bytesRead == 0) {
+                std::cout << "Connection closed by client" << std::endl;
+                break;
+            }
+            else if (bytesRead < 0) {
+                auto error = Socket::getLastError();
+                if (error == Socket::Error::INTERRUPTED ||
+                    error == Socket::Error::WOULD_BLOCK) {
+                    if (++retryCount > maxRetryCount) {
+                        std::cerr << "Max retries exceeded" << std::endl;
+                        break;
+                    }
+                    // Exponential backoff: 10ms, 20ms, 40ms, 80ms, 160ms
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(10 * (1 << (retryCount - 1)))
+                    );
+                    continue;
+                }
+                else {
+                    std::cerr << "Error reading from socket: " << Socket::getErrorString(error) << std::endl;
+                    break;
+                }
+            }
+        }
+        return receivedTotal;
     }
 
     void close() {
