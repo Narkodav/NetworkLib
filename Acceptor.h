@@ -36,7 +36,7 @@ public:
 					Socket client(std::move(m_acceptSocket.accept()));
 					client
 						.setNonBlocking(clientNonBlocking)
-						.setTimeout(clientTimeout);
+						.setTimeout(std::chrono::seconds(clientTimeout));
 					m_acceptIOContext.postAcceptCallback(std::move(client), callback);
 				}
 				catch (const std::exception& e) {

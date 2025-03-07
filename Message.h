@@ -1,6 +1,7 @@
 #pragma once
 #include "Common.h"
 #include "Socket.h"
+#include "Body.h"
 
 namespace http
 {
@@ -105,6 +106,57 @@ namespace http
                 {"user-agent", Standard::USER_AGENT},
                 {"via", Standard::VIA},
                 {"warning", Standard::WARNING}
+            };
+
+            class iterator {
+            private:
+                std::map<Standard, std::string>::const_iterator standardIt;
+                std::map<Standard, std::string>::const_iterator standardEnd;
+                std::map<std::string, std::string, CaseInsensetiveStringComparator>::const_iterator customIt;
+                std::map<std::string, std::string, CaseInsensetiveStringComparator>::const_iterator customEnd;
+                bool isInStandard;
+
+            public:
+                iterator(
+                    std::map<Standard, std::string>::const_iterator stdIt,
+                    std::map<Standard, std::string>::const_iterator stdEnd,
+                    std::map<std::string, std::string, CaseInsensetiveStringComparator>::const_iterator custIt,
+                    std::map<std::string, std::string, CaseInsensetiveStringComparator>::const_iterator custEnd,
+                    bool inStandard
+                ) : standardIt(stdIt), standardEnd(stdEnd),
+                    customIt(custIt), customEnd(custEnd),
+                    isInStandard(inStandard) {
+                }
+
+                // Iterator operators
+                iterator& operator++() {
+                    if (isInStandard) {
+                        ++standardIt;
+                        if (standardIt == standardEnd) {
+                            isInStandard = false;
+                        }
+                    }
+                    else {
+                        ++customIt;
+                    }
+                    return *this;
+                }
+
+                bool operator!=(const iterator& other) const {
+                    if (isInStandard != other.isInStandard) return true;
+                    if (isInStandard) {
+                        return standardIt != other.standardIt;
+                    }
+                    return customIt != other.customIt;
+                }
+
+                // Return type for dereferencing
+                std::pair<std::string, std::string> operator*() const {
+                    if (isInStandard) {
+                        return { headerToString.at(standardIt->first), standardIt->second };
+                    }
+                    return { customIt->first, customIt->second };
+                }
             };
 
         private:
@@ -212,97 +264,24 @@ namespace http
                 }
                 return ss.str();
             }
-        };
 
-        class Body {
-        protected:
-                size_t m_size = 0;
-        public:
-            virtual ~Body() = default;
-
-            // Common access patterns
-            size_t size() const { return m_size; };
-            bool empty() const { return m_size; };
-
-            // Read interface
-            virtual size_t read(char* dest, size_t offset, size_t length) const = 0;
-
-            // Write interface
-            virtual void write(const char* data, size_t length) = 0;
-            virtual void append(const char* data, size_t length) = 0;
-
-            virtual void parseTransferSize(Socket& sock, std::string& leftovers,
-                size_t size, size_t maxRetryCount, size_t maxBodySize) = 0;
-            virtual void parseChunked(Socket& sock, std::string& leftovers,
-                size_t maxRetryCount, size_t maxBodySize) = 0;
-        };
-
-        // In-memory implementation
-        class StringBody : public Body {
-        private:
-            std::string m_data;
-
-        public:
-
-            size_t read(char* dest, size_t offset, size_t length) const override {
-                if (offset >= m_data.size()) return 0;
-                size_t available = min(length, m_data.size() - offset);
-                std::memcpy(dest, m_data.data() + offset, available);
-                return available;
+            iterator begin() const {
+                bool startInStandard = !m_standardHeaders.empty();
+                return iterator(
+                    m_standardHeaders.begin(), m_standardHeaders.end(),
+                    m_customHeaders.begin(), m_customHeaders.end(),
+                    startInStandard
+                );
             }
 
-            void write(const char* data, size_t length) override {
-                m_data.assign(data, length);
+            iterator end() const {
+                return iterator(
+                    m_standardHeaders.end(), m_standardHeaders.end(),
+                    m_customHeaders.end(), m_customHeaders.end(),
+                    false
+                );
             }
 
-            void append(const char* data, size_t length) override {
-                m_data.append(data, length);
-            }
-
-            const char* data() const { return m_data.data(); }
-
-            virtual void parseTransferSize(Socket& sock, std::string& leftovers,
-                size_t size, size_t maxRetryCount, size_t maxBodySize) override;
-            virtual void parseChunked(Socket& sock, std::string& leftovers,
-                size_t maxRetryCount, size_t maxBodySize) override;
-        };
-
-        // File-based implementation
-        class FileBody : public Body {
-        private:
-            mutable std::fstream m_file;
-            std::string m_path;
-
-        public:
-            explicit FileBody(const std::string& path)
-                : m_path(path) {
-                m_file.open(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
-                if (!m_file) throw std::runtime_error("Cannot open file buffer");
-            }
-
-            size_t read(char* dest, size_t offset, size_t length) const override {
-                if (offset >= m_size) return 0;
-                m_file.seekg(offset);
-                m_file.read(dest, length);
-                return m_file.gcount();
-            }
-
-            void write(const char* data, size_t length) override {
-                m_file.seekp(0);
-                m_file.write(data, length);
-                m_size = length;
-            }
-
-            void append(const char* data, size_t length) override {
-                m_file.seekp(m_size);
-                m_file.write(data, length);
-                m_size += length;
-            }
-
-            virtual void parseTransferSize(Socket& sock, std::string& leftovers,
-                size_t size, size_t maxRetryCount, size_t maxBodySize) override;
-            virtual void parseChunked(Socket& sock, std::string& leftovers,
-                size_t maxRetryCount, size_t maxBodySize) override;
         };
 
         enum class Type {
@@ -318,8 +297,6 @@ namespace http
             CONNECTION_CLOSE,
             NONE,
         };
-
-
 
     protected:
         std::string version = "HTTP/1.1";
@@ -339,6 +316,8 @@ namespace http
         void setVersion(const std::string& ver) { version = ver; };
 
         virtual Type getType() const { return Type::UNKNOWN; };
+
+        virtual std::string getFirstLine() const = 0;
     };
 
     class Request : public Message {
@@ -389,7 +368,7 @@ namespace http
         std::string uri;
 
     public:
-       Request() = default;
+        Request() = default;
         void setMethod(const Method& m) { method = m; }
         void setUri(const std::string& u) { uri = u; }
         const Method& getMethod() const { return method; }
@@ -406,6 +385,8 @@ namespace http
             auto it = methodToStringMap.find(m);
             return it != methodToStringMap.end() ? it->second : "UNKNOWN";
         };
+
+        virtual std::string getFirstLine() const;
     };
 
     class Response : public Message {
@@ -481,72 +462,72 @@ namespace http
         };
 
         static inline const std::map<StatusCode, std::string> statusCodeToStringMap = {
-            {StatusCode::UNKNOWN, "0"},
+            {StatusCode::UNKNOWN, "Unknown"},
 
             // 1xx Informational
-            {StatusCode::CONTINUE, "100"},
-            {StatusCode::SWITCHING_PROTOCOLS, "101"},
-            {StatusCode::PROCESSING, "102"},
-            {StatusCode::EARLY_HINTS, "103"},
+            {StatusCode::CONTINUE, "Continue"},
+            {StatusCode::SWITCHING_PROTOCOLS, "Switching Protocols"},
+            {StatusCode::PROCESSING, "Processing"},
+            {StatusCode::EARLY_HINTS, "Early Hints"},
 
             // 2xx Success
-            {StatusCode::OK, "200"},
-            {StatusCode::CREATED, "201"},
-            {StatusCode::ACCEPTED, "202"},
-            {StatusCode::NON_AUTHORITATIVE_INFORMATION, "203"},
-            {StatusCode::NO_CONTENT, "204"},
-            {StatusCode::RESET_CONTENT, "205"},
-            {StatusCode::PARTIAL_CONTENT, "206"},
+            {StatusCode::OK, "OK"},
+            {StatusCode::CREATED, "Created"},
+            {StatusCode::ACCEPTED, "Accepted"},
+            {StatusCode::NON_AUTHORITATIVE_INFORMATION, "Non-Authoritative Information"},
+            {StatusCode::NO_CONTENT, "No Content"},
+            {StatusCode::RESET_CONTENT, "Reset Content"},
+            {StatusCode::PARTIAL_CONTENT, "Partial Content"},
 
             // 3xx Redirection
-            {StatusCode::MULTIPLE_CHOICES, "300"},
-            {StatusCode::MOVED_PERMANENTLY, "301"},
-            {StatusCode::FOUND, "302"},
-            {StatusCode::SEE_OTHER, "303"},
-            {StatusCode::NOT_MODIFIED, "304"},
-            {StatusCode::TEMPORARY_REDIRECT, "307"},
-            {StatusCode::PERMANENT_REDIRECT, "308"},
+            {StatusCode::MULTIPLE_CHOICES, "Multiple Choices"},
+            {StatusCode::MOVED_PERMANENTLY, "Moved Permanently"},
+            {StatusCode::FOUND, "Found"},
+            {StatusCode::SEE_OTHER, "See Other"},
+            {StatusCode::NOT_MODIFIED, "Not Modified"},
+            {StatusCode::TEMPORARY_REDIRECT, "Temporary Redirect"},
+            {StatusCode::PERMANENT_REDIRECT, "Permanent Redirect"},
 
             // 4xx Client Error
-            {StatusCode::BAD_REQUEST, "400"},
-            {StatusCode::UNAUTHORIZED, "401"},
-            {StatusCode::PAYMENT_REQUIRED, "402"},
-            {StatusCode::FORBIDDEN, "403"},
-            {StatusCode::NOT_FOUND, "404"},
-            {StatusCode::METHOD_NOT_ALLOWED, "405"},
-            {StatusCode::NOT_ACCEPTABLE, "406"},
-            {StatusCode::PROXY_AUTHENTICATION_REQUIRED, "407"},
-            {StatusCode::REQUEST_TIMEOUT, "408"},
-            {StatusCode::CONFLICT, "409"},
-            {StatusCode::GONE, "410"},
-            {StatusCode::LENGTH_REQUIRED, "411"},
-            {StatusCode::PRECONDITION_FAILED, "412"},
-            {StatusCode::PAYLOAD_TOO_LARGE, "413"},
-            {StatusCode::URI_TOO_LONG, "414"},
-            {StatusCode::UNSUPPORTED_MEDIA_TYPE, "415"},
-            {StatusCode::RANGE_NOT_SATISFIABLE, "416"},
-            {StatusCode::EXPECTATION_FAILED, "417"},
-            {StatusCode::IM_A_TEAPOT, "418"},
-            {StatusCode::UNPROCESSABLE_ENTITY, "422"},
-            {StatusCode::TOO_EARLY, "425"},
-            {StatusCode::UPGRADE_REQUIRED, "426"},
-            {StatusCode::PRECONDITION_REQUIRED, "428"},
-            {StatusCode::TOO_MANY_REQUESTS, "429"},
-            {StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE, "431"},
-            {StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS, "451"},
+            {StatusCode::BAD_REQUEST, "Bad Request"},
+            {StatusCode::UNAUTHORIZED, "Unauthorized"},
+            {StatusCode::PAYMENT_REQUIRED, "Payment Required"},
+            {StatusCode::FORBIDDEN, "Forbidden"},
+            {StatusCode::NOT_FOUND, "Not Found"},
+            {StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed"},
+            {StatusCode::NOT_ACCEPTABLE, "Not Acceptable"},
+            {StatusCode::PROXY_AUTHENTICATION_REQUIRED, "Proxy Authentication Required"},
+            {StatusCode::REQUEST_TIMEOUT, "Request Timeout"},
+            {StatusCode::CONFLICT, "Conflict"},
+            {StatusCode::GONE, "Gone"},
+            {StatusCode::LENGTH_REQUIRED, "Length Required"},
+            {StatusCode::PRECONDITION_FAILED, "Precondition Failed"},
+            {StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large"},
+            {StatusCode::URI_TOO_LONG, "URI Too Long"},
+            {StatusCode::UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type"},
+            {StatusCode::RANGE_NOT_SATISFIABLE, "Range Not Satisfiable"},
+            {StatusCode::EXPECTATION_FAILED, "Expectation Failed"},
+            {StatusCode::IM_A_TEAPOT, "I'm a teapot"},
+            {StatusCode::UNPROCESSABLE_ENTITY, "Unprocessable Entity"},
+            {StatusCode::TOO_EARLY, "Too Early"},
+            {StatusCode::UPGRADE_REQUIRED, "Upgrade Required"},
+            {StatusCode::PRECONDITION_REQUIRED, "Precondition Required"},
+            {StatusCode::TOO_MANY_REQUESTS, "Too Many Requests"},
+            {StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE, "Request Header Fields Too Large"},
+            {StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS, "Unavailable For Legal Reasons"},
 
             // 5xx Server Error
-            {StatusCode::INTERNAL_SERVER_ERROR, "500"},
-            {StatusCode::NOT_IMPLEMENTED, "501"},
-            {StatusCode::BAD_GATEWAY, "502"},
-            {StatusCode::SERVICE_UNAVAILABLE, "503"},
-            {StatusCode::GATEWAY_TIMEOUT, "504"},
-            {StatusCode::HTTP_VERSION_NOT_SUPPORTED, "505"},
-            {StatusCode::VARIANT_ALSO_NEGOTIATES, "506"},
-            {StatusCode::INSUFFICIENT_STORAGE, "507"},
-            {StatusCode::LOOP_DETECTED, "508"},
-            {StatusCode::NOT_EXTENDED, "510"},
-            {StatusCode::NETWORK_AUTHENTICATION_REQUIRED, "511"}
+            {StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"},
+            {StatusCode::NOT_IMPLEMENTED, "Not Implemented"},
+            {StatusCode::BAD_GATEWAY, "Bad Gateway"},
+            {StatusCode::SERVICE_UNAVAILABLE, "Service Unavailable"},
+            {StatusCode::GATEWAY_TIMEOUT, "Gateway Timeout"},
+            {StatusCode::HTTP_VERSION_NOT_SUPPORTED, "HTTP Version Not Supported"},
+            {StatusCode::VARIANT_ALSO_NEGOTIATES, "Variant Also Negotiates"},
+            {StatusCode::INSUFFICIENT_STORAGE, "Insufficient Storage"},
+            {StatusCode::LOOP_DETECTED, "Loop Detected"},
+            {StatusCode::NOT_EXTENDED, "Not Extended"},
+            {StatusCode::NETWORK_AUTHENTICATION_REQUIRED, "Network Authentication Required"}
         };
 
         static inline const std::map<std::string, StatusCode> statusCodeFromStringMap = {
@@ -640,6 +621,10 @@ namespace http
             auto it = statusCodeToStringMap.find(m);
             return it != statusCodeToStringMap.end() ? it->second : "UNKNOWN";
         };
+
+        virtual std::string getFirstLine() const;
     };
+
+    using MessagePtr = std::unique_ptr<Message>; //a unique pointer to a message
 
 }

@@ -1,12 +1,12 @@
-#include "Parser.h"
-
+#include "Receiver.h"
 
 namespace http
 {
 
-
-    std::unique_ptr<Message> Parser::parseFirstLine(std::stringstream& line)
+    MessagePtr Receiver::parseFirstLine(std::stringstream& line)
     {
+        std::cout << "Parsing first line" << std::endl;
+
         std::string token;
 
         if (!(line >> token)) {
@@ -15,6 +15,7 @@ namespace http
 
         if (token.starts_with("HTTP/")) // message is a response
         {
+            std::cout << "Message is a response" << std::endl;
             auto response = std::make_unique<Response>();
 
             // Validate and set version
@@ -54,6 +55,7 @@ namespace http
         }
         else // message is a request
         {
+            std::cout << "Message is a request" << std::endl;
             auto request = std::make_unique<Request>();
 
             // Set method
@@ -76,13 +78,15 @@ namespace http
                 throw std::runtime_error("Invalid HTTP version: " + token);
             }
             request->setVersion(token);
+            std::getline(line, token, '\n'); //remove end of line
 
             return request;
         }
     }
 
-    bool Parser::parseHeaders(std::stringstream& headers, std::unique_ptr<Message>& message)
+    bool Receiver::parseHeaders(std::stringstream& headers, MessagePtr& message)
     {
+        std::cout << "Parsing headers" << std::endl;
         std::string header;
         std::string line;
         std::string value;
@@ -157,7 +161,7 @@ namespace http
         return false; // No empty line found - incomplete headers
     }
 
-    std::pair<Message::TransferMethod, int> Parser::determineTransferMethod(std::unique_ptr<Message>& message)
+    std::pair<Message::TransferMethod, int> Receiver::determineTransferMethod(MessagePtr& message)
     {
         auto value = message->getHeaders().get(Message::Headers::Standard::TRANSFER_ENCODING);
         if (!value.empty()) {
@@ -186,17 +190,20 @@ namespace http
             (Message::TransferMethod::NONE, 0);
     }
 
-    std::unique_ptr<Message> Parser::parseHeader(Socket& sock, Buffer& leftovers)
+    size_t Receiver::readHeader(Socket& sock, Buffer& leftovers, MessagePtr& message)
     {
-        leftovers.reserve(1024);
-        std::unique_ptr<Message> message;
+        leftovers.resize(1024);
+        size_t bytesReadTotal = 0;
+        std::cout << "Parsing headers...\n" << std::endl;
 
         try
         {
             sock.receiveLoop(leftovers.data(),
                 leftovers.size(), 0, MAX_RETRY_COUNT,
-                [this, &leftovers, &message]
+                [&leftovers, &message, &bytesReadTotal]
                 (char*& buffer, size_t& len, size_t bytesRead, size_t& receivedTotal) {
+                    
+                    std::cout << "Received " << bytesRead << " bytes\n" << std::endl;
 
                     if (receivedTotal > MAX_HEADER_SIZE) {
                         throw std::runtime_error("HTTP header too large (exceeds "
@@ -214,9 +221,12 @@ namespace http
                         return true;
                     }
 
+                    bytesReadTotal = receivedTotal;
                     std::stringstream ss(leftovers.substr(0, headerEnd + 4));
                     leftovers.erase(0, headerEnd + 4);
                     leftovers.shrink_to_fit();
+                    std::cout << "Received data: " << leftovers << std::endl;
+
                     message = parseFirstLine(ss);
                     parseHeaders(ss, message);
                     return false;
@@ -226,50 +236,161 @@ namespace http
         catch (const std::exception& e)
         {
             std::cerr << "Error parsing message: " << e.what() << std::endl;
-            return nullptr;
+            return 0;
         }
-        return message;
+        return bytesReadTotal;
     }
 
-
-    void Parser::parseBody(Socket& sock, std::unique_ptr<Message>& message,
-        Buffer& leftovers, std::unique_ptr<Message::Body>&& bodyStorage)
-    {
-        std::pair<Message::TransferMethod, int> methodAndLength =
-            determineTransferMethod(message);
-        message->setBody(std::move(bodyStorage));
-
-        switch (methodAndLength.first)
-        {
-        case Message::TransferMethod::CONTENT_LENGTH:
-            message->getBody()->parseTransferSize(sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
-            break;
-        case Message::TransferMethod::CHUNKED:
-            message->getBody()->parseChunked(sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
-            break;
-        default:
-            break; //HTTP/1.1 only supports chunked or content length transfer methods
-        }
-    }
-
-    std::unique_ptr<Message> Parser::parseMessage(Socket& sock)
+    size_t Receiver::read(Socket& sock, MessagePtr& message)
     {
         std::string leftovers;
-
+        size_t bytesRead = 0;
         try
         {
-            std::unique_ptr<Message> message = parseHeader(sock, leftovers);
+            MessagePtr message;
+            bytesRead += readHeader(sock, leftovers, message);
+            std::unique_ptr<StringBody> body = std::make_unique<StringBody>();
 
+            bytesRead += readBody<StringBody>(sock, leftovers, message);
 
-            std::unique_ptr<Message::StringBody> body = std::make_unique<Message::StringBody>();
-
-            parseBody(sock, message, leftovers, std::move(body));
-
-            return message;
+            return bytesRead;
         }
         catch (std::exception& e)
         {
             std::cerr << "Error parsing message: " << e.what() << std::endl;
+        }
+    }
+
+    size_t Receiver::read(Socket& sock, MessagePtr& message, BodyTypeHandler handler)
+    {
+        std::string leftovers;
+        size_t bytesRead = 0;
+        MessagePtr message;
+
+        try
+        {
+            bytesRead += readHeader(sock, leftovers, message);
+            auto methodAndLength = determineTransferMethod(message);
+            message->setBody(handler(message));
+
+            switch (methodAndLength.first)
+            {
+            case Message::TransferMethod::CONTENT_LENGTH:
+                bytesRead += message->getBody()->parseTransferSize
+                (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                break;
+            case Message::TransferMethod::CHUNKED:
+                bytesRead += message->getBody()->parseChunked
+                (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                break;
+            default:
+                break; //HTTP/1.1 only supports chunked or content length transfer methods
+            }
+
+            return bytesRead;
+        }
+        catch (std::exception& e)
+        {
+            std::cerr << "Error parsing message: " << e.what() << std::endl;
+        }
+    }
+
+
+    void Receiver::asyncRead(IOContext& context,Socket& sock,
+        MessagePtr& message, std::function<void(size_t)> callback)
+    {
+        try
+        {
+            context.post([&context, &sock, &message, callback]() {
+                try
+                {
+                    size_t bytesRead = 0;
+                    Buffer leftovers;
+                    bytesRead += readHeader(sock, leftovers, message);
+
+                    bytesRead += readBody<StringBody>(sock, leftovers, message);
+
+                    context.postParserCallback(bytesRead, callback);
+                }
+                catch (const std::exception& e)
+                {
+                    context.postParserCallback(0, callback);
+                }
+                });
+        }
+        catch (std::exception e)
+        {
+            throw std::runtime_error("Error during asynchronous header reading: " + std::string(e.what()));
+        }
+    }
+
+    void Receiver::asyncRead(IOContext& context, Socket& sock,
+        MessagePtr& message, BodyTypeHandler handler,
+        std::function<void(size_t)> callback)
+    {
+        try
+        {
+            context.post([&context, &sock, &message, handler, callback]() {
+                size_t bytesRead = 0;
+                Buffer leftovers;
+                MessagePtr message;
+
+                try
+                {
+                    bytesRead += readHeader(sock, leftovers, message);
+                    auto methodAndLength = determineTransferMethod(message);
+                    message->setBody(handler(message));
+
+                    switch (methodAndLength.first)
+                    {
+                    case Message::TransferMethod::CONTENT_LENGTH:
+                        bytesRead += message->getBody()->parseTransferSize
+                        (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                        break;
+                    case Message::TransferMethod::CHUNKED:
+                        bytesRead += message->getBody()->parseChunked
+                        (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                        break;
+                    default:
+                        break; //HTTP/1.1 only supports chunked or content length transfer methods
+                    }
+
+                    context.postParserCallback(bytesRead, callback);
+                }
+                catch (const std::exception& e)
+                {
+                    context.postParserCallback(0, callback);
+                }
+                });
+        }
+        catch (std::exception e)
+        {
+            throw std::runtime_error("Error during asynchronous header reading: " + std::string(e.what()));
+        }
+    }
+
+    void Receiver::asyncReadHeader(IOContext& context, Socket& sock,
+        Buffer& leftovers, MessagePtr& message,
+        std::function<void(size_t)> callback)
+    {
+        try
+        {
+            context.post([&context, &sock, callback, &leftovers, &message]() {
+                try
+                {
+                    size_t bytesRead = 0;
+                    bytesRead = readHeader(sock, leftovers, message);
+                    context.postParserCallback(bytesRead, callback);
+                }
+                catch (const std::exception& e)
+                {
+                    context.postParserCallback(0, callback);
+                }
+                });
+        }
+        catch (std::exception e)
+        {
+            throw std::runtime_error("Error during asynchronous header reading: " + std::string(e.what()));
         }
     }
 }

@@ -5,9 +5,13 @@
 #pragma comment(lib, "Ws2_32.lib")
 #else
 #include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #endif
 
 #include <stdexcept>
@@ -26,10 +30,49 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <chrono>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <filesystem>
 
 //Vendor
-
 #include <Multithreading/ThreadPool.h>
+
+
+namespace http {
+
+#ifndef CUSTOM_RETRY_COUNT
+	static inline const size_t MAX_RETRY_COUNT = 5;
+#else
+	static inline const size_t MAX_RETRY_COUNT = CUSTOM_RETRY_COUNT;
+#endif
+
+#ifndef CUSTOM_BODY_LIMIT
+	static inline const size_t MAX_BODY_SIZE = 1024 * 1024 * 16;  // 16MB
+#else
+	static inline const size_t MAX_BODY_SIZE = CUSTOM_BODY_LIMIT;
+#endif
+
+#ifndef CUSTOM_HEADER_LIMIT
+	static inline const size_t MAX_HEADER_SIZE = 1024 * 16; //16 KBs
+#else
+	static inline const size_t MAX_HEADER_SIZE = CUSTOM_HEADER_LIMIT; //16 KBs
+#endif
+
+#ifndef CUSTOM_HEADER_NAME_LIMIT
+	static inline const size_t MAX_HEADER_NAME_LENGTH = 256;
+#else
+	static inline const size_t MAX_HEADER_NAME_LENGTH = CUSTOM_HEADER_NAME_LIMIT;
+#endif
+
+#ifndef CUSTOM_HEADER_VALUE_LIMIT
+	static inline const size_t MAX_HEADER_VALUE_LENGTH = 8192;
+#else
+	static inline const size_t MAX_HEADER_VALUE_LENGTH = CUSTOM_HEADER_VALUE_LIMIT;
+#endif
+
+}
 
 struct CaseInsensetiveStringComparator
 {
@@ -45,7 +88,7 @@ struct CaseInsensetiveStringComparator
 
 };
 
-uint32_t hexToDec(const std::string& hex)
+static inline uint32_t hexToDec(const std::string& hex)
 {
 	try {
 		return static_cast<uint32_t>(std::stoul(hex, nullptr, 16));

@@ -1,6 +1,52 @@
 #pragma once
 #include "Common.h"
 
+// pretty much all networking uses Socket abstraction
+#ifdef _WIN32
+class WSAInitializer {
+private:
+    WSAInitializer() {
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            throw std::runtime_error("WSAStartup failed");
+        }
+
+        if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2) {
+            WSACleanup();
+            throw std::runtime_error("Could not find Winsock 2.2");
+        }
+    }
+
+public:
+    WSAInitializer(WSAInitializer const&) = delete;
+    void operator=(WSAInitializer const&) = delete;
+
+    static WSAInitializer& instance() {
+        try {
+            static WSAInitializer inst;
+            return inst;
+        }
+        catch (const std::exception& e) {
+#ifndef MANUAL_WSA_INIT
+            std::cerr << "Failed to initialize WSA: " << e.what() << std::endl;
+            std::exit(1);
+#else
+            throw std::runtime_error("Failed to initialize WSA: " + std::string(e.what()));
+#endif
+        }
+    }
+
+    ~WSAInitializer() {
+        WSACleanup();
+    }
+};
+
+#ifndef MANUAL_WSA_INIT //define this if you want to manually init the WSA or have custom init error handling
+    static auto& WSAinit = WSAInitializer::instance();
+#endif
+
+#endif
+
 class Socket {
 public:
 
@@ -25,61 +71,61 @@ public:
     };
 
     static inline const std::map<Error, std::string> errorStrings = {
-    {Error::NONE, "No error"},
-    {Error::WOULD_BLOCK, "Operation would block"},
-    {Error::INTERRUPTED, "Operation interrupted"},
-    {Error::DISCONNECTED, "Connection disconnected"},
-    {Error::CONN_REFUSED, "Connection refused by peer"},
-    {Error::CONN_RESET, "Connection reset by peer"},
-    {Error::CONN_ABORTED, "Connection aborted"},
-    {Error::TIMED_OUT, "Operation timed out"},
-    {Error::IN_PROGRESS, "Operation in progress"},
-    {Error::ALREADY, "Operation already in progress"},
-    {Error::NOT_CONNECTED, "Socket not connected"},
-    {Error::ADDR_IN_USE, "Address already in use"},
-    {Error::ADDR_NOT_AVAIL, "Address not available"},
-    {Error::NET_UNREACHABLE, "Network is unreachable"},
-    {Error::HOST_UNREACHABLE, "Host is unreachable"},
-    {Error::INVALID_ARG, "Invalid argument"},
-    {Error::UNKNOWN, "Unknown error"}
+    {Error::NONE,               "No error"},
+    {Error::WOULD_BLOCK,        "Operation would block"},
+    {Error::INTERRUPTED,        "Operation interrupted"},
+    {Error::DISCONNECTED,       "Connection disconnected"},
+    {Error::CONN_REFUSED,       "Connection refused by peer"},
+    {Error::CONN_RESET,         "Connection reset by peer"},
+    {Error::CONN_ABORTED,       "Connection aborted"},
+    {Error::TIMED_OUT,          "Operation timed out"},
+    {Error::IN_PROGRESS,        "Operation in progress"},
+    {Error::ALREADY,            "Operation already in progress"},
+    {Error::NOT_CONNECTED,      "Socket not connected"},
+    {Error::ADDR_IN_USE,        "Address already in use"},
+    {Error::ADDR_NOT_AVAIL,     "Address not available"},
+    {Error::NET_UNREACHABLE,    "Network is unreachable"},
+    {Error::HOST_UNREACHABLE,   "Host is unreachable"},
+    {Error::INVALID_ARG,        "Invalid argument"},
+    {Error::UNKNOWN,            "Unknown error"}
     };
 
 #ifdef _WIN32
     static inline const std::map<int, Error> errorMap = {
-        {0, Error::NONE},
-        {WSAEWOULDBLOCK, Error::WOULD_BLOCK},
-        {WSAEINTR, Error::INTERRUPTED},
-        {WSAECONNREFUSED, Error::CONN_REFUSED},
-        {WSAECONNRESET, Error::CONN_RESET},
-        {WSAECONNABORTED, Error::CONN_ABORTED},
-        {WSAETIMEDOUT, Error::TIMED_OUT},
-        {WSAEINPROGRESS, Error::IN_PROGRESS},
-        {WSAEALREADY, Error::ALREADY},
-        {WSAENOTCONN, Error::NOT_CONNECTED},
-        {WSAEADDRINUSE, Error::ADDR_IN_USE},
-        {WSAEADDRNOTAVAIL, Error::ADDR_NOT_AVAIL},
-        {WSAENETUNREACH, Error::NET_UNREACHABLE},
-        {WSAEHOSTUNREACH, Error::HOST_UNREACHABLE},
-        {WSAEINVAL, Error::INVALID_ARG}
+        {0,                 Error::NONE},
+        {WSAEWOULDBLOCK,    Error::WOULD_BLOCK},
+        {WSAEINTR,          Error::INTERRUPTED},
+        {WSAECONNREFUSED,   Error::CONN_REFUSED},
+        {WSAECONNRESET,     Error::CONN_RESET},
+        {WSAECONNABORTED,   Error::CONN_ABORTED},
+        {WSAETIMEDOUT,      Error::TIMED_OUT},
+        {WSAEINPROGRESS,    Error::IN_PROGRESS},
+        {WSAEALREADY,       Error::ALREADY},
+        {WSAENOTCONN,       Error::NOT_CONNECTED},
+        {WSAEADDRINUSE,     Error::ADDR_IN_USE},
+        {WSAEADDRNOTAVAIL,  Error::ADDR_NOT_AVAIL},
+        {WSAENETUNREACH,    Error::NET_UNREACHABLE},
+        {WSAEHOSTUNREACH,   Error::HOST_UNREACHABLE},
+        {WSAEINVAL,         Error::INVALID_ARG}
     };
 #else
     static inline const std::map<int, Error> errorMap = {
-        {0, Error::NONE},
-        {EAGAIN, Error::WOULD_BLOCK},
-        {EWOULDBLOCK, Error::WOULD_BLOCK},
-        {EINTR, Error::INTERRUPTED},
-        {ECONNREFUSED, Error::CONN_REFUSED},
-        {ECONNRESET, Error::CONN_RESET},
-        {ECONNABORTED, Error::CONN_ABORTED},
-        {ETIMEDOUT, Error::TIMED_OUT},
-        {EINPROGRESS, Error::IN_PROGRESS},
-        {EALREADY, Error::ALREADY},
-        {ENOTCONN, Error::NOT_CONNECTED},
-        {EADDRINUSE, Error::ADDR_IN_USE},
-        {EADDRNOTAVAIL, Error::ADDR_NOT_AVAIL},
-        {ENETUNREACH, Error::NET_UNREACHABLE},
-        {EHOSTUNREACH, Error::HOST_UNREACHABLE},
-        {EINVAL, Error::INVALID_ARG}
+        {0,                 Error::NONE},
+        {EAGAIN,            Error::WOULD_BLOCK},
+        {EWOULDBLOCK,       Error::WOULD_BLOCK},
+        {EINTR,             Error::INTERRUPTED},
+        {ECONNREFUSED,      Error::CONN_REFUSED},
+        {ECONNRESET,        Error::CONN_RESET},
+        {ECONNABORTED,      Error::CONN_ABORTED},
+        {ETIMEDOUT,         Error::TIMED_OUT},
+        {EINPROGRESS,       Error::IN_PROGRESS},
+        {EALREADY,          Error::ALREADY},
+        {ENOTCONN,          Error::NOT_CONNECTED},
+        {EADDRINUSE,        Error::ADDR_IN_USE},
+        {EADDRNOTAVAIL,     Error::ADDR_NOT_AVAIL},
+        {ENETUNREACH,       Error::NET_UNREACHABLE},
+        {EHOSTUNREACH,      Error::HOST_UNREACHABLE},
+        {EINVAL,            Error::INVALID_ARG}
     };
 #endif
 
@@ -162,229 +208,86 @@ public:
         return *this;
     }
 
-    void bind(uint16_t port, const char* ip = nullptr) {
-        std::vector<char> binaryIp(4);
-        m_addr.sin_family = m_domain;
-        m_addr.sin_port = htons(port);
-        if (ip == nullptr) {
-            m_addr.sin_addr.s_addr = INADDR_ANY;
-        }
-        else {
-            if (inet_pton(AF_INET, ip, &m_addr.sin_addr) <= 0) {
-                throw std::runtime_error("Invalid IP address");
-            }
-        }
+    void bind(uint16_t port, const char* ip = nullptr);
 
-        if (::bind(m_sockfd, (struct sockaddr*)&m_addr, sizeof(m_addr)) < 0) {
-            throw std::runtime_error("Bind failed: " +
-                getLastErrorString());
-        }
-    }
+    void listen(int backlog = DEFAULT_BACKLOG);
 
-    void listen(int backlog = DEFAULT_BACKLOG) {
-        if (::listen(m_sockfd, backlog) < 0) {
-            throw std::runtime_error("Listen failed: " +
-                getLastErrorString());
-        }
-    }
+    Socket accept();
 
-    Socket accept() {
-        struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
+    void connect(const char* ip, uint16_t port);
 
-#ifdef _WIN32
-        SOCKET clientfd = ::accept(m_sockfd, (struct sockaddr*)&client_addr, &client_len);
-#else
-        int clientfd = ::accept(m_sockfd, (struct sockaddr*)&client_addr, &client_len);
-#endif
-        
-        if (clientfd < 0) {
-            throw std::runtime_error("Accept failed: " +
-                getLastErrorString());
-        }
+    int send(const char* data, size_t len);
 
-        char clientIP[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(client_addr.sin_addr), clientIP, INET_ADDRSTRLEN);
-        m_isConnected = true;
-        Socket client(clientfd, client_addr);
-        return client;
-    }
+    int sendCommited(const char* data, size_t len, size_t maxRetryCount);
 
-    void connect(const char* ip, uint16_t port) {
-        std::vector<char> binaryIp(4);
-        m_addr.sin_family = AF_INET;
-        m_addr.sin_port = htons(port);
-        m_addr.sin_addr.s_addr = inet_pton(AF_INET, ip, binaryIp.data());
+    int sendLoop(char* buffer, size_t len, size_t totalStart, size_t maxRetryCount,
+        std::function<bool(char*&, size_t&, size_t, size_t&)> handler);
 
-        if (::connect(m_sockfd, (struct sockaddr*)&m_addr, sizeof(m_addr)) < 0) {
-            throw std::runtime_error("Connect failed" +
-                getLastErrorString());
-        }
-        m_isConnected = true;
-    }
+    //returns available data size
+    u_long checkDataAvailable();
 
-    size_t send(const char* data, size_t len) {
-#ifdef _WIN32
-        return ::send(m_sockfd, data, len, 0);
-#else
-        return ::write(m_sockfd, data, len);
-#endif
-    }
+    //returns true if there is data in the queue, returns false when timeout expires
+    template<typename Duration>
+    bool waitForData(const Duration& timeout) {
 
-    int receive(char* buffer, size_t len) {
         if (m_sockfd < 0) {
             throw std::runtime_error("Client socket is not connected: " +
                 getLastErrorString());
         }
+
 #ifdef _WIN32
-        return ::recv(m_sockfd, buffer, len, 0);
+        u_long bytesAvailable = 0;
+        if (ioctlsocket(m_sockfd, FIONREAD, &bytesAvailable) == SOCKET_ERROR) {
+            throw std::runtime_error("Failed to check available data");
+        }
 #else
-        return ::read(m_sockfd, buffer, len);
+        int bytesAvailable = 0;
+        if (ioctl(m_sockfd, FIONREAD, &bytesAvailable) == -1) {
+            throw std::runtime_error("Failed to check available data: " +
+                getLastErrorString());
+        }
 #endif
+
+        if (bytesAvailable > 0)
+            return true;
+
+        fd_set readSet;
+        FD_ZERO(&readSet);
+        FD_SET(m_sockfd, &readSet);
+
+        auto secs = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+        auto microsecs = std::chrono::duration_cast<std::chrono::microseconds>(timeout - secs);
+        timeval timeoutVal{
+            static_cast<long>(secs.count()),
+            static_cast<long>(microsecs.count())
+        };
+
+#ifdef _WIN32
+        int result = select(0, &readSet, nullptr, nullptr, &timeoutVal);
+#else
+        // On Unix systems, first parameter is highest fd + 1
+        int result = select(m_sockfd + 1, &readSet, nullptr, nullptr, &timeoutVal);
+#endif
+
+        if (result < 0) {
+            if(getLastError() == Error::INTERRUPTED)
+                return false;  // Interrupted by signal
+            throw std::runtime_error("Select failed: " + getLastErrorString());
+        }
+
+        return result > 0;  // True if data available
     }
 
-    /**
- * @brief Continuously receives data from the socket until the handler indicates completion
- *        or an error occurs.
- *
- * This function implements a flexible receiving loop that allows dynamic buffer management
- * through a handler callback. The handler can control both where subsequent reads will be
- * stored and when to stop receiving.
- *
- * @param buffer Initial buffer where received data will be stored
- * @param len Size of the initial buffer
- * @param maxRetryCount Maximum number of retry attempts for INTERRUPTED/WOULD_BLOCK errors
- * @param handler Callback function that processes received data and controls further reads
- *               The handler receives:
- *               - char*& buffer: Reference to buffer pointer, can be modified to change
- *                               where the next read will store data
- *               - size_t& len: Reference to buffer length, can be modified to change
- *                             the maximum bytes to read in next iteration
- *               - size_t bytesRead: Number of bytes received in current read
- *               - size_t receivedTotal: Total number of bytes received so far
- *               Returns: bool indicating whether to continue receiving (true) or stop (false)
- *
- * @return Total number of bytes received across all successful reads
- *
- * @throws std::runtime_error if socket is invalid or connection errors occur
- *
- * @note The function implements exponential backoff for retry attempts, starting at 10ms
- *       and doubling with each retry.
- *
- * Example usage:
- * @code
- * // Basic usage - accumulate data in a vector
- * std::vector<char> data;
- * char buffer[1024];
- * socket.receiveLoop(buffer, sizeof(buffer), 5,
- *     [&data](char*& buf, size_t& len, size_t bytesRead, size_t receivedTotal) {
- *         // Append received data to vector
- *         data.insert(data.end(), buf, buf + bytesRead);
- *         std::cout << "Received " << receivedTotal << " bytes so far\n";
- *         return true; // Continue receiving
- *     });
- *
- * // Advanced usage - protocol parsing with varying buffer sizes
- * Protocol protocol;
- * char headerBuf[HEADER_SIZE];
- * char* dataBuf = nullptr;
- * size_t expectedDataSize = 0;
- * bool headerReceived = false;
- *
- * socket.receiveLoop(headerBuf, HEADER_SIZE, 5,
- *     [&](char*& buf, size_t& len, size_t bytesRead, size_t receivedTotal) {
- *         if (!headerReceived) {
- *             // Process header and allocate data buffer
- *             expectedDataSize = protocol.parseHeader(headerBuf);
- *             dataBuf = new char[expectedDataSize];
- *             // Set up for data receive
- *             buf = dataBuf;
- *             len = expectedDataSize;
- *             headerReceived = true;
- *             return true;
- *         } else {
- *             // Process complete message
- *             protocol.processData(dataBuf, bytesRead);
- *             delete[] dataBuf;
- *             return false; // Stop receiving
- *         }
- *     });
- * @endcode
- */
+    int receive(char* buffer, size_t len);
 
     int receiveLoop(char* buffer, size_t len, size_t totalStart, size_t maxRetryCount,
-        std::function<bool(char*&, size_t&, size_t, size_t&)> handler) {
-        if (m_sockfd < 0) {
-            throw std::runtime_error("Client socket is not connected: " +
-                getLastErrorString());
-        }
-        size_t retryCount = 0;
-        size_t receivedTotal = totalStart;
-        bool shouldRead = true;
+        std::function<bool(char*&, size_t&, size_t, size_t&)> handler);
 
-        while (shouldRead) {
+    void close();
 
-#ifdef _WIN32
-            auto bytesRead = ::recv(m_sockfd, buffer, len, 0);
-#else
-            auto bytesRead = ::read(m_sockfd, buffer, len);
-#endif
-            if (bytesRead > 0) {
-                // Reset retry count on successful read
-                retryCount = 0;
-                receivedTotal += bytesRead;
-                shouldRead = handler(buffer, len, bytesRead, receivedTotal);
-            }
-            else if (bytesRead == 0) {
-                std::cout << "Connection closed by client" << std::endl;
-                break;
-            }
-            else if (bytesRead < 0) {
-                auto error = Socket::getLastError();
-                if (error == Socket::Error::INTERRUPTED ||
-                    error == Socket::Error::WOULD_BLOCK) {
-                    if (++retryCount > maxRetryCount) {
-                        std::cerr << "Max retries exceeded" << std::endl;
-                        break;
-                    }
-                    // Exponential backoff: 10ms, 20ms, 40ms, 80ms, 160ms
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(10 * (1 << (retryCount - 1)))
-                    );
-                    continue;
-                }
-                else {
-                    std::cerr << "Error reading from socket: " << Socket::getErrorString(error) << std::endl;
-                    break;
-                }
-            }
-        }
-        return receivedTotal;
-    }
-
-    void close() {
-        if (m_sockfd >= 0) {
-            // Shutdown gracefully first
-            shutdown(m_sockfd,
-#ifdef _WIN32
-                SD_BOTH
-#else
-                SHUT_RDWR
-#endif
-            );
-
-#ifdef _WIN32
-            closesocket(m_sockfd);
-#else
-            ::close(m_sockfd);
-#endif
-            m_sockfd = -1;  // Mark as closed
-            m_isConnected = false;
-        }
-    }
-
-    Socket& setTimeout(int seconds) {
-        m_timeout = seconds;
+    template<typename Duration>
+    Socket& setTimeout(const Duration& timeout) {
+        m_timeout = std::duration_cast<std::chrono::seconds>(timeout);
 #ifdef _WIN32
         DWORD timeout = m_timeout * 1000;
         if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) != 0) {
@@ -401,42 +304,16 @@ public:
         return *this;
     }
 
-    Socket& setNonBlocking(bool nonBlocking = true) {
-        m_nonBlocking = nonBlocking;
-#ifdef _WIN32
-        u_long mode = m_nonBlocking ? 1 : 0;
-        if (ioctlsocket(m_sockfd, FIONBIO, &mode) != 0) {
-            throw std::runtime_error("Failed to set non-blocking mode");
-        }
-#else
-        int flags = fcntl(m_sockfd, F_GETFL, 0);
-        if (flags == -1) {
-            throw std::runtime_error("Failed to get socket flags");
-        }
-        if (fcntl(m_sockfd, F_SETFL, m_nonBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK)) == -1) {
-            throw std::runtime_error("Failed to set non-blocking mode");
-        }
-#endif
-        return *this;
-    }
+    Socket& setNonBlocking(bool nonBlocking = true);
 
-    static Error getLastError() {
-#ifdef _WIN32
-        int error = WSAGetLastError();
-#else
-        int error = errno;
-#endif
-        auto it = errorMap.find(error);
-        return (it != errorMap.end()) ? it->second : Error::UNKNOWN;
-    }
+    int getReceiveBufferSize();
 
-    static std::string getErrorString(Error error) {
-        auto it = errorStrings.find(error);
-        return (it != errorStrings.end()) ? it->second : "Undefined error";
-    }
+    void setReceiveBufferSize(int size);
 
-    static std::string getLastErrorString() {
-        return getErrorString(getLastError());
-    }
+    static Error getLastError();
+
+    static std::string getErrorString(Error error);
+
+    static std::string getLastErrorString();
 };
 
