@@ -124,18 +124,18 @@ namespace http {
             size_t maxBodySize) override;
     };
 
-    class BodyFactory
-    {
-    public:
-        static std::unique_ptr<Body> getBody(Body::Type type) {
-            switch (type) {
-            case Body::Type::STRING:
-                return std::make_unique<StringBody>();
-            case Body::Type::FILE:
-                return std::make_unique<FileBody>();
-            default:
-                throw std::runtime_error("Unknown body type");
-            }
-        }
-    };
+    //class BodyFactory
+    //{
+    //public:
+    //    static std::unique_ptr<Body> getBody(Body::Type type) {
+    //        switch (type) {
+    //        case Body::Type::STRING:
+    //            return std::make_unique<StringBody>();
+    //        case Body::Type::FILE:
+    //            return std::make_unique<FileBody>();
+    //        default:
+    //            throw std::runtime_error("Unknown body type");
+    //        }
+    //    }
+    //};
 }

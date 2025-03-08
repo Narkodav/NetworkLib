@@ -1,0 +1,35 @@
+body {
+    background-color: rgb(34, 209, 171);
+}
+
+h1 {
+    font-family: 'Comic Sans MS', 'Gill Sans', 'Gill Sans MT', sans-serif, Calibri, 'Trebuchet MS';
+    color: rgb(102, 6, 6);
+    border: 2px dashed rgb(1,1,1);
+    border-collapse: collapse;
+    display: inline-block;
+    padding: 2px;
+}
+
+p {
+    font-family: 'Comic Sans MS', 'Gill Sans', 'Gill Sans MT', sans-serif, Calibri, 'Trebuchet MS';
+    color: rgb(211, 19, 108);
+}
+
+#cat {
+    width: 80%;
+}
+
+#bebra {
+    width: 80%;
+    padding: 2px;
+}
+
+table, th, td {
+    border: 2px dashed rgb(1,1,1);
+    border-collapse: collapse;
+}
+
+td:hover {
+    background-color: rgb(127, 185, 18);
+}

@@ -1,46 +1,69 @@
 #pragma once
 #include "IOContext.h"
-#include "Parser.h"
+#include "Receiver.h"
+#include "Sender.h"
 
 namespace http
 {
+
+    //handles the loop, automatic session close and logging
     class Session : public std::enable_shared_from_this<Session>
     {
-    private:
-        Socket socket;
-        bool keepAlive = true;
-
     public:
-        Session(Socket&& socket) : socket(std::move(socket)) {};
+        using ResponseHandlerFunction = std::function<std::unique_ptr<Message>(std::unique_ptr<Message>&)>;
+        using BodyHandlerFunction = std::function<std::unique_ptr<Body>(std::unique_ptr<Message>&)>;
+
+    private:
+        Socket m_socket;
+        ResponseHandlerFunction m_responseHandler;
+        BodyHandlerFunction m_bodyHandler;
+
+        size_t m_bytesSent = 0;
+        size_t m_bytesReceived = 0;
+        size_t m_iterationCount = 0;
+    public:
+        Session(Socket&& socket, BodyHandlerFunction&& bodyHandler, ResponseHandlerFunction&& responseHandler) :
+            m_socket(std::move(socket)), m_bodyHandler(std::move(bodyHandler)),
+            m_responseHandler(std::move(responseHandler)) {};
+
+        ~Session() { m_socket.close(); };
 
         void start() {
-            while (keepAlive) {
+            while (true) {
                 auto message = receiveMessage();
-                auto response = handleMessage(message);
+                auto response = m_responseHandler(message);
                 sendResponse(response);
+                m_iterationCount++;
 
-                keep_alive = message.keepAlive() && !socket.isClosed();
+                if (message->getHeaders().get(Message::Headers::Standard::CONNECTION) != "keep-alive"
+                    || !m_socket.waitForData(std::chrono::seconds(15)))
+                    break;
             }
+        }
+
+        void startAssync(IOContext& ioContext, IOContext::SessionCallback&& callback) {
+            auto self = shared_from_this();
+            ioContext.post([self, &ioContext, callback = std::move(callback)]() {
+                self->start();
+                ioContext.postSessionCallback(IOContext::SessionData{
+                    self->m_bytesSent,self->m_bytesReceived,self->m_iterationCount }, std::move(callback));
+                });
         }
 
         MessagePtr receiveMessage() {
             MessagePtr msg;
             std::string leftovers;
-            size_t bytesReceived = 0;
-            bytesReceived += Parser::readHeader(socket, leftovers, msg);
-
-            // determine body type and read body
-            bytesReceived += Parser::readBody<StringBody>(socket, leftovers, msg);
+            m_bytesReceived += Receiver::read(m_socket, msg,
+                [this](MessagePtr& message) ->std::unique_ptr<Body> {
+                    return std::move(m_bodyHandler(message));
+                });
 
             return msg;
         }
 
-        MessagePtr handleMessage(MessagePtr& msg) {
-            MessagePtr rsp;
-
-            //handling message
-
-            return rsp;
+        void sendResponse(MessagePtr& res)
+        {
+            m_bytesSent += Sender::send(m_socket, res);
         }
     };
 

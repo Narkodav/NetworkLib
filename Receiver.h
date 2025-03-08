@@ -38,11 +38,11 @@ namespace http
             switch (methodAndLength.first)
             {
             case Message::TransferMethod::CONTENT_LENGTH:
-                return message->getBody()->parseTransferSize
+                return message->getBody()->readTransferSize
                 (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
                 break;
             case Message::TransferMethod::CHUNKED:
-                return message->getBody()->parseChunked
+                return message->getBody()->readChunked
                 (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
                 break;
             default:

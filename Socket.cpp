@@ -1,6 +1,6 @@
 #include "Socket.h"
 
-void Socket::bind(uint16_t port, const char* ip = nullptr) {
+void Socket::bind(uint16_t port, const char* ip /*= nullptr*/) {
     std::vector<char> binaryIp(4);
     m_addr.sin_family = m_domain;
     m_addr.sin_port = htons(port);
@@ -19,7 +19,7 @@ void Socket::bind(uint16_t port, const char* ip = nullptr) {
     }
 }
 
-void Socket::listen(int backlog = DEFAULT_BACKLOG) {
+void Socket::listen(int backlog /*= DEFAULT_BACKLOG*/) {
     if (::listen(m_sockfd, backlog) < 0) {
         throw std::runtime_error("Listen failed: " +
             getLastErrorString());
@@ -275,7 +275,7 @@ void Socket::close() {
     }
 }
 
-Socket& Socket::setNonBlocking(bool nonBlocking = true) {
+Socket& Socket::setNonBlocking(bool nonBlocking /*= true*/) {
     m_nonBlocking = nonBlocking;
 #ifdef _WIN32
     u_long mode = m_nonBlocking ? 1 : 0;

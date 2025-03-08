@@ -285,19 +285,20 @@ public:
 
     void close();
 
+
     template<typename Duration>
     Socket& setTimeout(const Duration& timeout) {
-        m_timeout = std::duration_cast<std::chrono::seconds>(timeout);
+        m_timeout = std::chrono::duration_cast<std::chrono::seconds>(timeout).count();
 #ifdef _WIN32
-        DWORD timeout = m_timeout * 1000;
-        if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) != 0) {
+        DWORD timeoutMilisecs = m_timeout * 1000;
+        if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeoutMilisecs, sizeof(timeoutMilisecs)) != 0) {
             throw std::runtime_error("Failed to set socket timeout");
         }
 #else
-        struct timeval timeout;
-        timeout.tv_sec = m_timeout;
-        timeout.tv_usec = 0;
-        if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
+        struct timeval timeoutStruct;
+        timeoutStruct.tv_sec = m_timeout;
+        timeoutStruct.tv_usec = 0;
+        if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeoutStruct, sizeof(timeoutStruct)) != 0) {
             throw std::runtime_error("Failed to set socket timeout");
         }
 #endif

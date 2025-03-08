@@ -265,7 +265,6 @@ namespace http
     {
         std::string leftovers;
         size_t bytesRead = 0;
-        MessagePtr message;
 
         try
         {
@@ -276,11 +275,11 @@ namespace http
             switch (methodAndLength.first)
             {
             case Message::TransferMethod::CONTENT_LENGTH:
-                bytesRead += message->getBody()->parseTransferSize
+                bytesRead += message->getBody()->readTransferSize
                 (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
                 break;
             case Message::TransferMethod::CHUNKED:
-                bytesRead += message->getBody()->parseChunked
+                bytesRead += message->getBody()->readChunked
                 (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
                 break;
             default:
@@ -344,11 +343,11 @@ namespace http
                     switch (methodAndLength.first)
                     {
                     case Message::TransferMethod::CONTENT_LENGTH:
-                        bytesRead += message->getBody()->parseTransferSize
+                        bytesRead += message->getBody()->readTransferSize
                         (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
                         break;
                     case Message::TransferMethod::CHUNKED:
-                        bytesRead += message->getBody()->parseChunked
+                        bytesRead += message->getBody()->readChunked
                         (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
                         break;
                     default:
