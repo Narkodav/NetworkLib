@@ -308,13 +308,15 @@ namespace http
     size_t StringBody::sendChunked(Socket& sock, size_t maxRetryCount,
         size_t maxBodySize)
     {
-
+        return 0;
 
     }
 
     size_t FileBody::sendTransferSize(Socket& sock, size_t size,
         size_t maxRetryCount, size_t maxBodySize)
     {
+        std::cout << "Sending body transfer size: " << std::endl;
+
         m_file.seekg(0, std::ios::beg);
         if (m_size == 0)
             throw std::runtime_error("Body has no content to send");
@@ -328,16 +330,26 @@ namespace http
 
             if (bytesRead < buffer.size()) {
                 // Small file case - single send
+                std::cout << "Sending the message in one go" << std::endl;
                 return sock.sendCommited(buffer.data(), bytesRead, maxRetryCount);
             }
+
+            std::cout << "Sending the message iteratively" << std::endl;
+
             return sock.sendLoop(buffer.data(), buffer.size(), 0, maxRetryCount,
                 [this, &buffer](char*& buf, size_t& len, size_t bytesSent, size_t& receivedTotal) {
-                    size_t bytesRead = m_file.read(buffer.data() + bytesSent, buffer.size() - bytesSent).gcount();
+                    for (size_t i = bytesSent; i < len; i++)
+                        buffer[i - bytesSent] = buffer[i];
+
+                    size_t bytesLeft = len - bytesSent;
+                    size_t bytesRead = m_file.read(buffer.data() + bytesLeft, buffer.size() - bytesLeft).gcount();
+
                     len -= bytesSent - bytesRead;
                     if (len > 0)
                         return true;
                     return false;
                 });
+            
         }
         catch (const std::exception& e)
         {
@@ -349,6 +361,6 @@ namespace http
         size_t maxBodySize)
     {
         m_file.seekg(0, std::ios::beg);
-
+        return 0;
     }
 }

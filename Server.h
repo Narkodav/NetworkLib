@@ -60,6 +60,7 @@ namespace http
         std::string m_name;
 
         std::atomic<uint64_t> m_temporaryFileCounter = 0;
+        uint64_t m_sessionCounter = 0;
 
         //statistics
         size_t m_totalBytesSent = 0;

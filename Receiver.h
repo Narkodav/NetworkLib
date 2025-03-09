@@ -16,7 +16,7 @@ namespace http
 
     private:
 
-        static MessagePtr parseFirstLine(std::stringstream& line); //returns a message of the needed type
+        static void parseFirstLine(std::stringstream& line, MessagePtr& message);
         static bool parseHeaders(std::stringstream& headers, MessagePtr& message);
 
         //stores bytes if used content length

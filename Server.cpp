@@ -21,26 +21,28 @@ namespace http
             accept();
             m_activeSessions++;
             std::make_shared<Session>(
-                std::move(socket), 
+                std::move(socket),
                 [this](MessagePtr& message) ->std::unique_ptr<Body> {
                     return chooseBodyType(message); //not thread safe
                 },
                 [this](std::unique_ptr<Message>& message) {
                     return handleMessage(message);
-                }
-            )->startAssync(m_context, [this](const IOContext::SessionData& data) {
-                // Log session statistics
-                std::cout << "Session ended - Stats:\n"
-                    << "  Bytes sent: " << data.bytesSent << "\n"
-                    << "  Bytes received: " << data.bytesReceived << "\n"
-                    << "  Requests handled: " << data.iterationCount << "\n";
+                }, std::to_string(m_sessionCounter)
+                    )->startAssync(m_context, [this](const IOContext::SessionData& data) {
+                    // Log session statistics
+                    std::cout << "Session ended - Stats:\n"
+                        << "  Bytes sent: " << data.bytesSent << "\n"
+                        << "  Bytes received: " << data.bytesReceived << "\n"
+                        << "  Requests handled: " << data.iterationCount << "\n";
 
-                // Update server metrics
-                m_totalBytesSent += data.bytesSent;
-                m_totalBytesReceived += data.bytesReceived;
-                m_totalRequests += data.iterationCount;
-                m_activeSessions--;
-                });
+                    // Update server metrics
+                    m_totalBytesSent += data.bytesSent;
+                    m_totalBytesReceived += data.bytesReceived;
+                    m_totalRequests += data.iterationCount;
+                    m_activeSessions--;
+                        });
+
+                m_sessionCounter++;
             });
     }
 
@@ -48,7 +50,7 @@ namespace http
         std::unique_ptr<Body> body;
         auto& headers = msg->getHeaders();
         auto transferEncoding = headers.get(Message::Headers::Standard::TRANSFER_ENCODING);
-        auto& contentType = headers.get(Message::Headers::Standard::CONTENT_TYPE);
+        auto contentType = headers.get(Message::Headers::Standard::CONTENT_TYPE);
         if (transferEncoding == "chunked") {
             body = std::make_unique<FileBody>("Receives/Temporary" +
                 std::to_string(m_temporaryFileCounter.load()) + ".bin"); //since we don't know the size default to file body
@@ -76,7 +78,7 @@ namespace http
             }
         }
         else {
-            auto& contentLength = headers.get(Message::Headers::Standard::CONTENT_LENGTH);
+            auto contentLength = headers.get(Message::Headers::Standard::CONTENT_LENGTH);
             if (contentLength != "") {
                 size_t length = std::stoul(contentLength);
                 if (length > 1024 * 1024) //1MB
@@ -170,6 +172,10 @@ namespace http
             auto& headers = res->getHeaders();
 
             auto mimeType = getMimeType(filepath);
+            if (mimeType.starts_with("image/"))
+            {
+                std::cout << "Sending an image: " << filepath << std::endl;
+            }
             if (mimeType.starts_with("text/"))
                 headers.set(Message::Headers::Standard::CONTENT_TYPE, mimeType + "; charset=utf-8");
             else headers.set(Message::Headers::Standard::CONTENT_TYPE, mimeType);
@@ -231,47 +237,47 @@ namespace http
 
     std::unique_ptr<Response> Server::handleConnect(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handleDelete(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handleHead(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handleOptions(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handlePatch(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handlePost(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handlePut(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handleTrace(Request& req)
     {
-
+        return nullptr;
     }
 
     std::unique_ptr<Response> Server::handleUnknown(Request& req)
     {
-
+        return nullptr;
     }
 
 }

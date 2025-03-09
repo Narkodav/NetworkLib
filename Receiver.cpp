@@ -3,10 +3,8 @@
 namespace http
 {
 
-    MessagePtr Receiver::parseFirstLine(std::stringstream& line)
+    void Receiver::parseFirstLine(std::stringstream& line, MessagePtr& message)
     {
-        std::cout << "Parsing first line" << std::endl;
-
         std::string token;
 
         if (!(line >> token)) {
@@ -15,8 +13,8 @@ namespace http
 
         if (token.starts_with("HTTP/")) // message is a response
         {
-            std::cout << "Message is a response" << std::endl;
-            auto response = std::make_unique<Response>();
+            message = std::make_unique<Response>();
+            auto* response = static_cast<Response*>(&(*message));
 
             // Validate and set version
             if (!token.starts_with("HTTP/1.") || token.length() != 8) {
@@ -50,13 +48,11 @@ namespace http
                 throw std::runtime_error("Missing status message");
             }
             response->setStatusMessage(statusMsg);
-
-            return response;
         }
         else // message is a request
         {
-            std::cout << "Message is a request" << std::endl;
-            auto request = std::make_unique<Request>();
+            message = std::make_unique<Request>();
+            auto* request = static_cast<Request*>(&(*message));
 
             // Set method
             auto method = Request::stringToMethod(token);
@@ -79,14 +75,11 @@ namespace http
             }
             request->setVersion(token);
             std::getline(line, token, '\n'); //remove end of line
-
-            return request;
         }
     }
 
     bool Receiver::parseHeaders(std::stringstream& headers, MessagePtr& message)
     {
-        std::cout << "Parsing headers" << std::endl;
         std::string header;
         std::string line;
         std::string value;
@@ -194,7 +187,6 @@ namespace http
     {
         leftovers.resize(1024);
         size_t bytesReadTotal = 0;
-        std::cout << "Parsing headers...\n" << std::endl;
 
         try
         {
@@ -202,8 +194,6 @@ namespace http
                 leftovers.size(), 0, MAX_RETRY_COUNT,
                 [&leftovers, &message, &bytesReadTotal]
                 (char*& buffer, size_t& len, size_t bytesRead, size_t& receivedTotal) {
-                    
-                    std::cout << "Received " << bytesRead << " bytes\n" << std::endl;
 
                     if (receivedTotal > MAX_HEADER_SIZE) {
                         throw std::runtime_error("HTTP header too large (exceeds "
@@ -225,9 +215,8 @@ namespace http
                     std::stringstream ss(leftovers.substr(0, headerEnd + 4));
                     leftovers.erase(0, headerEnd + 4);
                     leftovers.shrink_to_fit();
-                    std::cout << "Received data: " << leftovers << std::endl;
 
-                    message = parseFirstLine(ss);
+                    parseFirstLine(ss, message);
                     parseHeaders(ss, message);
                     return false;
                 }
@@ -269,6 +258,10 @@ namespace http
         try
         {
             bytesRead += readHeader(sock, leftovers, message);
+            std::cout << "Bytes read: " << bytesRead << std::endl;
+            if (message == nullptr)
+                return 0;
+
             auto methodAndLength = determineTransferMethod(message);
             message->setBody(handler(message));
 

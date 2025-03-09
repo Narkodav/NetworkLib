@@ -188,12 +188,12 @@ namespace http
                 else return m_customHeaders.contains(header);
             }
 
-            const std::string& get(Standard header) const {
+            std::string get(Standard header) const {
                 auto it = m_standardHeaders.find(header);
                 return it != m_standardHeaders.end() ? it->second : "";
             }
 
-            const std::string& get(const std::string& header) const {
+            std::string get(const std::string& header) const {
                 auto it = headerFromString.find(header);
                 if (it != headerFromString.end())
                 {

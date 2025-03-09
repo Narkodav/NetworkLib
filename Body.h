@@ -87,7 +87,7 @@ namespace http {
     public:
         explicit FileBody(const std::string& path)
             : m_path(path) {
-            m_file.open(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+            m_file.open(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::app);
             if (!m_file) throw std::runtime_error("Cannot open file buffer");
             m_size = std::filesystem::file_size(path);
         }
@@ -109,6 +109,12 @@ namespace http {
             m_file.seekp(m_size);
             m_file.write(data, length);
             m_size += length;
+        }
+
+        void clear() {
+            m_file.close();
+            m_file.open(m_path, std::ios::binary | std::ios::out | std::ios::trunc);
+            m_size = 0;
         }
 
         Type getType() const override { return Type::FILE; };
