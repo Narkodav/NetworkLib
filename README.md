@@ -50,7 +50,7 @@ int main() {
 	server.startBlocking();
 }
 
-//basic client implementation
+//basic server implementation
 #include "Socket.h"
 
 int main() {
@@ -80,7 +80,7 @@ int main() {
 		});
 }
 
-//basic server implementation
+//basic client implementation
 #include "Socket.h"
 
 int main() {
