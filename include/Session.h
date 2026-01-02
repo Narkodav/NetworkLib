@@ -3,7 +3,7 @@
 #include "Receiver.h"
 #include "Sender.h"
 
-namespace http
+namespace Network::HTTP
 {
 
     //handles the loop, automatic session close and logging
@@ -51,7 +51,7 @@ namespace http
                 sendResponse(response);
                 m_iterationCount++;
 
-                if (message->getHeaders().get(Message::Headers::Standard::CONNECTION) != "keep-alive"
+                if (message->getHeaders().get(Message::Headers::Standard::Connection) != "keep-alive"
                     || !m_socket.waitForData(std::chrono::seconds(15)))
                     break;
             }
@@ -67,18 +67,18 @@ namespace http
                 });
         }
 
-        MessagePtr receiveMessage() {
-            MessagePtr msg;
+        std::unique_ptr<Message> receiveMessage() {
+            std::unique_ptr<Message> msg;
             std::string leftovers;
             m_bytesReceived += Receiver::read(m_socket, msg,
-                [this](MessagePtr& message) ->std::unique_ptr<Body> {
+                [this](std::unique_ptr<Message>& message) ->std::unique_ptr<Body> {
                     return std::move(m_bodyHandler(message));
                 });
 
             return msg;
         }
 
-        void sendResponse(MessagePtr& res)
+        void sendResponse(std::unique_ptr<Message>& res)
         {
             m_bytesSent += Sender::send(m_socket, res);
         }

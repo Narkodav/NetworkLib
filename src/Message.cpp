@@ -1,10 +1,10 @@
-#include "Message.h"
+#include "../include/Message.h"
 
-namespace http
+namespace Network::HTTP
 {
 	std::string Request::getFirstLine() const
 	{
-		return methodToString(method) + " " + uri + " " + version + "\r\n";
+		return std::string(methodToString(method)) + " " + uri + " " + version + "\r\n";
 	}
 
 	std::string Response::getFirstLine() const

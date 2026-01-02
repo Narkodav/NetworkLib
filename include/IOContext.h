@@ -13,14 +13,14 @@ public:
 		size_t iterationCount = 0;
 	};
 
-	using AcceptCallback = std::function<void(Socket&&)>;
+	using AcceptCallback = std::function<void(Network::Socket&&)>;
 	using ParserCallback = std::function<void(size_t)>; //returns bytes sent
 	using SessionCallback = std::function<void(SessionData)>; //returns total sent bytes and the number of iterations
 
 private:
 	MT::ThreadPool m_pool;
 	std::atomic<bool> m_shouldRun;
-	MT::Deque<std::pair<Socket, AcceptCallback>> m_acceptCallbackQueue;
+	MT::Deque<std::pair<Network::Socket, AcceptCallback>> m_acceptCallbackQueue;
 	MT::Deque<std::pair<size_t, ParserCallback>> m_parserCallbackQueue;
 	MT::Deque<std::pair<SessionData, SessionCallback>> m_sessionCallbackQueue;
 
@@ -35,7 +35,7 @@ public:
 
 	void run() {
 		m_shouldRun = true;
-		std::pair<Socket, AcceptCallback> bufferAccept;
+		std::pair<Network::Socket, AcceptCallback> bufferAccept;
 		std::pair<size_t, ParserCallback> bufferParser;
 		std::pair<SessionData, SessionCallback> bufferSession;
 
@@ -59,7 +59,7 @@ public:
 		m_pool.pushTask(task);
 	}
 
-	void postAcceptCallback (Socket&& socket, AcceptCallback task) {
+	void postAcceptCallback (Network::Socket&& socket, AcceptCallback task) {
 		m_acceptCallbackQueue.pushBack(std::make_pair(std::move(socket), task));
 	}
 

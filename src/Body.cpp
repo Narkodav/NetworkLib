@@ -1,6 +1,6 @@
-#include "Body.h"
+#include "../include/Body.h"
 
-namespace http
+namespace Network::HTTP
 {
     size_t StringBody::readTransferSize(Socket& sock,
         std::string& leftovers, size_t size, size_t maxRetryCount,
@@ -86,7 +86,7 @@ namespace http
                             {
                                 isParsingHex = false;
                                 cursor += 1;
-                                chunkSize = hexToDec(hexBuffer);
+                                chunkSize = Detail::hexToDec(hexBuffer);
                                 displacementCounter += hexBuffer.size() + 4;
                                 hexBuffer.clear();
                                 if (chunkSize == 0)
@@ -231,7 +231,7 @@ namespace http
                             {
                                 isParsingHex = false;
                                 cursor += 1;
-                                chunkSize = hexToDec(hexBuffer);
+                                chunkSize = Detail::hexToDec(hexBuffer);
                                 displacementCounter += hexBuffer.size() + 4;
                                 hexBuffer.clear();
                                 if (chunkSize == 0)

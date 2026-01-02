@@ -1,6 +1,6 @@
-#include "Server.h"
+#include "../include/Server.h"
 
-namespace http
+namespace Network::HTTP
 {
     void Server::startBlocking()
     {
@@ -22,18 +22,18 @@ namespace http
             m_activeSessions++;
             std::make_shared<Session>(
                 std::move(socket),
-                [this](MessagePtr& message) ->std::unique_ptr<Body> {
+                [this](std::unique_ptr<Message>& message) -> std::unique_ptr<Body> {
                     return chooseBodyType(message); //not thread safe
                 },
                 [this](std::unique_ptr<Message>& message) {
                     return handleMessage(message);
                 }, std::to_string(m_sessionCounter)
                     )->startAssync(m_context, [this](const IOContext::SessionData& data) {
-                    // Log session statistics
-                    std::cout << "Session ended - Stats:\n"
-                        << "  Bytes sent: " << data.bytesSent << "\n"
-                        << "  Bytes received: " << data.bytesReceived << "\n"
-                        << "  Requests handled: " << data.iterationCount << "\n";
+                    //// Log session statistics
+                    //std::cout << "Session ended - Stats:\n"
+                    //    << "  Bytes sent: " << data.bytesSent << "\n"
+                    //    << "  Bytes received: " << data.bytesReceived << "\n"
+                    //    << "  Requests handled: " << data.iterationCount << "\n";
 
                     // Update server metrics
                     m_totalBytesSent += data.bytesSent;
@@ -46,11 +46,11 @@ namespace http
             });
     }
 
-    std::unique_ptr<Body> Server::chooseBodyType(MessagePtr& msg) {
+    std::unique_ptr<Body> Server::chooseBodyType(std::unique_ptr<Message>& msg) {
         std::unique_ptr<Body> body;
         auto& headers = msg->getHeaders();
-        auto transferEncoding = headers.get(Message::Headers::Standard::TRANSFER_ENCODING);
-        auto contentType = headers.get(Message::Headers::Standard::CONTENT_TYPE);
+        auto transferEncoding = headers.get(Message::Headers::Standard::TransferEncoding);
+        auto contentType = headers.get(Message::Headers::Standard::ContentType);
         if (transferEncoding == "chunked") {
             body = std::make_unique<FileBody>("Receives/Temporary" +
                 std::to_string(m_temporaryFileCounter.load()) + ".bin"); //since we don't know the size default to file body
@@ -78,7 +78,7 @@ namespace http
             }
         }
         else {
-            auto contentLength = headers.get(Message::Headers::Standard::CONTENT_LENGTH);
+            auto contentLength = headers.get(Message::Headers::Standard::ContentLength);
             if (contentLength != "") {
                 size_t length = std::stoul(contentLength);
                 if (length > 1024 * 1024) //1MB
@@ -100,16 +100,16 @@ namespace http
         // Remove any .. to prevent directory traversal attacks
         if (target.find("..") != std::string::npos) {
             auto res = std::make_unique<Response>();
-            res->setStatusCode(Response::StatusCode::FORBIDDEN);
+            res->setStatusCode(Response::StatusCode::Forbidden);
             res->setVersion("HTTP/1.1");
 
             auto& headers = res->getHeaders();
-            headers.set(Message::Headers::Standard::CONTENT_TYPE, "text/plain");
-            headers.set(Message::Headers::Standard::SERVER, m_name);
+            headers.set(Message::Headers::Standard::ContentType, "text/plain");
+            headers.set(Message::Headers::Standard::Server, m_name);
 
             auto body = std::make_unique<StringBody>();
             std::string text = "Forbidden: Directory traversal attempt detected\n";
-            headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(text.size()));
+            headers.set(Message::Headers::Standard::ContentLength, std::to_string(text.size()));
             body->write(text.data(), text.size());
             res->setBody(std::move(body));
             return res;
@@ -120,16 +120,16 @@ namespace http
         try {
             if (!std::filesystem::exists(filepath)) {
                 auto res = std::make_unique<Response>();
-                res->setStatusCode(Response::StatusCode::NOT_FOUND);
+                res->setStatusCode(Response::StatusCode::NotFound);
                 res->setVersion("HTTP/1.1");
 
                 auto& headers = res->getHeaders();
-                headers.set(Message::Headers::Standard::CONTENT_TYPE, "text/plain");
-                headers.set(Message::Headers::Standard::SERVER, m_name);
+                headers.set(Message::Headers::Standard::ContentType, "text/plain");
+                headers.set(Message::Headers::Standard::Server, m_name);
 
                 auto body = std::make_unique<StringBody>();
                 std::string text = "404 Not Found\n";
-                headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(text.size()));
+                headers.set(Message::Headers::Standard::ContentLength, std::to_string(text.size()));
                 body->write(text.data(), text.size());
                 res->setBody(std::move(body));
                 return res;
@@ -137,16 +137,16 @@ namespace http
 
             if (std::filesystem::is_directory(filepath)) {
                 auto res = std::make_unique<Response>();
-                res->setStatusCode(Response::StatusCode::FORBIDDEN);
+                res->setStatusCode(Response::StatusCode::Forbidden);
                 res->setVersion("HTTP/1.1");
 
                 auto& headers = res->getHeaders();
-                headers.set(Message::Headers::Standard::CONTENT_TYPE, "text/plain");
-                headers.set(Message::Headers::Standard::SERVER, m_name);
+                headers.set(Message::Headers::Standard::ContentType, "text/plain");
+                headers.set(Message::Headers::Standard::Server, m_name);
 
                 auto body = std::make_unique<StringBody>();
                 std::string text = "403 Forbidden: Directory listing not allowed\n";
-                headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(text.size()));
+                headers.set(Message::Headers::Standard::ContentLength, std::to_string(text.size()));
                 body->write(text.data(), text.size());
                 res->setBody(std::move(body));
                 return res;
@@ -156,17 +156,17 @@ namespace http
 
             if (filesize == 0) {
                 auto res = std::make_unique<Response>();
-                res->setStatusCode(Response::StatusCode::NO_CONTENT);
+                res->setStatusCode(Response::StatusCode::NoContent);
                 res->setVersion("HTTP/1.1");
 
                 auto& headers = res->getHeaders();
-                headers.set(Message::Headers::Standard::SERVER, m_name);
+                headers.set(Message::Headers::Standard::Server, m_name);
 
                 return res;
             }
 
             auto res = std::make_unique<Response>();
-            res->setStatusCode(Response::StatusCode::OK);
+            res->setStatusCode(Response::StatusCode::Ok);
             res->setVersion("HTTP/1.1");
 
             auto& headers = res->getHeaders();
@@ -177,11 +177,11 @@ namespace http
                 std::cout << "Sending an image: " << filepath << std::endl;
             }
             if (mimeType.starts_with("text/"))
-                headers.set(Message::Headers::Standard::CONTENT_TYPE, mimeType + "; charset=utf-8");
-            else headers.set(Message::Headers::Standard::CONTENT_TYPE, mimeType);
+                headers.set(Message::Headers::Standard::ContentType, mimeType + "; charset=utf-8");
+            else headers.set(Message::Headers::Standard::ContentType, mimeType);
 
-            headers.set(Message::Headers::Standard::SERVER, m_name);
-            headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(filesize));
+            headers.set(Message::Headers::Standard::Server, m_name);
+            headers.set(Message::Headers::Standard::ContentLength, std::to_string(filesize));
 
             auto body = std::make_unique<FileBody>(filepath);
             res->setBody(std::move(body));
@@ -202,16 +202,16 @@ namespace http
         catch (const std::filesystem::filesystem_error& e) {
             // File system related errors
             auto res = std::make_unique<Response>();
-            res->setStatusCode(Response::StatusCode::INTERNAL_SERVER_ERROR);
+            res->setStatusCode(Response::StatusCode::InternalServerError);
             res->setVersion("HTTP/1.1");
 
             auto& headers = res->getHeaders();
-            headers.set(Message::Headers::Standard::SERVER, m_name);
-            headers.set(Message::Headers::Standard::CONTENT_TYPE, "text/plain");
+            headers.set(Message::Headers::Standard::Server, m_name);
+            headers.set(Message::Headers::Standard::ContentType, "text/plain");
 
             auto body = std::make_unique<StringBody>();
             std::string text = "500 Internal Server Error: File system error\n";
-            headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(text.size()));
+            headers.set(Message::Headers::Standard::ContentLength, std::to_string(text.size()));
             body->write(text.data(), text.size());
             res->setBody(std::move(body));
 
@@ -219,16 +219,16 @@ namespace http
         }
         catch (const std::exception& e) {
             auto res = std::make_unique<Response>();
-            res->setStatusCode(Response::StatusCode::INTERNAL_SERVER_ERROR);
+            res->setStatusCode(Response::StatusCode::InternalServerError);
             res->setVersion("HTTP/1.1");
 
             auto& headers = res->getHeaders();
-            headers.set(Message::Headers::Standard::SERVER, m_name);
-            headers.set(Message::Headers::Standard::CONTENT_TYPE, "text/plain");
+            headers.set(Message::Headers::Standard::Server, m_name);
+            headers.set(Message::Headers::Standard::ContentType, "text/plain");
 
             auto body = std::make_unique<StringBody>();
             std::string text = "500 Internal Server Error\n";
-            headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(text.size()));
+            headers.set(Message::Headers::Standard::ContentLength, std::to_string(text.size()));
             body->write(text.data(), text.size());
             res->setBody(std::move(body));
             return res;
@@ -278,6 +278,32 @@ namespace http
     std::unique_ptr<Response> Server::handleUnknown(Request& req)
     {
         return nullptr;
+    }
+
+    std::unique_ptr<Response> Server::handleResponse(Response& req)
+    {
+        auto json = Json::Value{ {
+            {"error", {
+                {"code", static_cast<int>(Response::StatusCode::BadRequest)},
+                {"message", "Protocol misuse: received HTTP response instead of request"},
+                {"expected", "HTTP request starting with method (GET, POST, PUT, etc.)"},
+                {"documentation", "https://tools.ietf.org/html/rfc7230#section-3"}
+            }},
+            {"timestamp", std::chrono::system_clock::now().time_since_epoch().count()}
+        } }.stringify();
+
+        auto resp = std::make_unique<Response>();
+        resp->setVersion("HTTP/1.1");
+        resp->setStatusCode(Response::StatusCode::BadRequest);
+        resp->setStatusMessage("Bad Request");
+        auto& headers = resp->getHeaders();
+        headers.set(Message::Headers::Standard::ContentType, "application/json");
+        headers.set(Message::Headers::Standard::Server, getName());
+        headers.set(Message::Headers::Standard::ContentLength, std::to_string(json.size()));
+		auto body = std::make_unique<StringBody>();
+		body->write(json.data(), json.size());
+        resp->setBody(std::move(body));
+        return resp;
     }
 
 }

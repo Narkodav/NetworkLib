@@ -6,30 +6,30 @@
 // takes a client socket a buffer and a io context returns an http request
 // doesn't actually store anything or have a state so its static
 
-namespace http
+namespace Network::HTTP
 {
     class Receiver
     {
     public:
         using Buffer = std::string;
-        using BodyTypeHandler = std::function<std::unique_ptr<Body>(MessagePtr&)>;
+        using BodyTypeHandler = std::function<std::unique_ptr<Body>(std::unique_ptr<Message>&)>;
 
     private:
 
-        static void parseFirstLine(std::stringstream& line, MessagePtr& message);
-        static bool parseHeaders(std::stringstream& headers, MessagePtr& message);
+        static void parseFirstLine(std::stringstream& line, std::unique_ptr<Message>& message);
+        static bool parseHeaders(std::stringstream& headers, std::unique_ptr<Message>& message);
 
         //stores bytes if used content length
-        static std::pair<Message::TransferMethod, int> determineTransferMethod(MessagePtr& message);
+        static std::pair<Message::TransferMethod, int> determineTransferMethod(std::unique_ptr<Message>& message);
 
     public:
 
 
-        static size_t readHeader(Socket& sock, Buffer& leftovers, MessagePtr& message); //buffer will store leftovers
+        static size_t readHeader(Socket& sock, Buffer& leftovers, std::unique_ptr<Message>& message); //buffer will store leftovers
 
         template<typename BodyType>
         static size_t readBody(Socket& sock, Buffer& leftovers,
-            MessagePtr& message)
+            std::unique_ptr<Message>& message)
         {
             std::pair<Message::TransferMethod, int> methodAndLength =
                 determineTransferMethod(message);
@@ -37,13 +37,13 @@ namespace http
 
             switch (methodAndLength.first)
             {
-            case Message::TransferMethod::CONTENT_LENGTH:
+            case Message::TransferMethod::ContentLength:
                 return message->getBody()->readTransferSize
-                (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                (sock, leftovers, methodAndLength.second, s_maxRetryCount, s_maxBodySize);
                 break;
-            case Message::TransferMethod::CHUNKED:
+            case Message::TransferMethod::Chunked:
                 return message->getBody()->readChunked
-                (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                (sock, leftovers, s_maxRetryCount, s_maxBodySize);
                 break;
             default:
                 break; //HTTP/1.1 only supports chunked or content length transfer methods
@@ -51,23 +51,23 @@ namespace http
         }
 
         // parse the message completely
-        static size_t read(Socket& sock, MessagePtr& message);
-        static size_t read(Socket& sock, MessagePtr& message, BodyTypeHandler handler);
+        static size_t read(Socket& sock, std::unique_ptr<Message>& message);
+        static size_t read(Socket& sock, std::unique_ptr<Message>& message, BodyTypeHandler handler);
 
         static void asyncRead(IOContext& context, Socket& sock,
-            MessagePtr& message, std::function<void(size_t)> callback);
+            std::unique_ptr<Message>& message, std::function<void(size_t)> callback);
 
         static void asyncRead(IOContext& context, Socket& sock,
-            MessagePtr& message, BodyTypeHandler handler,
+            std::unique_ptr<Message>& message, BodyTypeHandler handler,
             std::function<void(size_t)> callback);
 
         static void asyncReadHeader(IOContext& context, Socket& sock,
-            Buffer& leftovers, MessagePtr& message,
+            Buffer& leftovers, std::unique_ptr<Message>& message,
             std::function<void(size_t)> callback);
 
         template<typename BodyType>
         static void asyncReadBody(IOContext& context, Socket& sock,
-            Buffer& leftovers, MessagePtr& message, std::function<void(size_t)> callback)
+            Buffer& leftovers, std::unique_ptr<Message>& message, std::function<void(size_t)> callback)
         {
             try
             {

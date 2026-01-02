@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RestfulServer Client</title>
+</head>
+<body>
+    <h1>Hello Server Test</h1>
+    <input type="text" id="nameInput" placeholder="Enter your name" value="world">
+    <button onclick="sendRequest()">Send Request</button>
+    <div id="response"></div>
+
+    <script>
+        async function sendRequest() {
+            const name = document.getElementById('nameInput').value || 'world';
+            const url = `http://localhost:8080/hello/${name}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                document.getElementById('response').innerHTML = `<h3>Response:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('response').innerHTML = `<h3>Error:</h3><p>${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

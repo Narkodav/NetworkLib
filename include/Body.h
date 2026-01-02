@@ -2,7 +2,7 @@
 #include "Common.h"
 #include "Socket.h"
 
-namespace http {
+namespace Network::HTTP {
 
     class Body {
     public:
@@ -50,7 +50,7 @@ namespace http {
 
         size_t read(char* dest, size_t offset, size_t length) const override {
             if (offset >= m_data.size()) return 0;
-            size_t available = min(length, m_data.size() - offset);
+            size_t available = std::min(length, m_data.size() - offset);
             std::memcpy(dest, m_data.data() + offset, available);
             return available;
         }

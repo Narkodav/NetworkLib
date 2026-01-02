@@ -1,59 +1,31 @@
-#include "Server.h"
-#include "Session.h"
+#include "include/RestfulServer.h"
+#include "include/Session.h"
 
 int main()
 {
+	Network::HTTP::RestfulServer server(8080, "RestfulServer");
 
-	//Acceptor acceptor(ioContext, 8080);
-
-	//acceptor.asyncAccept([](Socket&& sock)
-	//	{
-	//		auto session = std::make_shared<http::Session>(
-	//			std::move(sock), 
-	//			[](std::unique_ptr<http::Message>& msg) {
-	//				return std::make_unique<http::StringBody>();
-	//			},
-	//			[](std::unique_ptr<http::Message>& msg) {
-	//				return nullptr;
-	//			});
-
-	//		session->start();
-
-	//	}
-	//
-	//);
-
-	//ioContext.run();
-
-	IOContext ioContext;
-	http::Server server(ioContext, 8080);
-	
-	server.startBlocking();
-
-	//Socket sock;
-
-	//sock.connect("127.0.0.1", 8080);
-
-	//std::fstream file("public/cat.jpg", std::ios::in | std::ios::out | std::ios::app | std::ios::binary);
-
-	//std::vector<char> buffer(256);
-	//size_t bytesRead = file.read(buffer.data(), buffer.size()).gcount();
-	//if (bytesRead < buffer.size())
-	//	return 0;
-
-	//sock.sendLoop(buffer.data(), buffer.size(), 0, 5,
-	//	[&buffer, &file](char*& buf, size_t& len, size_t bytesSent, size_t& receivedTotal) {
-	//		for (size_t i = bytesSent; i < len; i++)
-	//			buffer[i - bytesSent] = buffer[i];
-
-	//		size_t bytesLeft = len - bytesSent;
-	//		size_t bytesRead = file.read(buffer.data() + bytesLeft, buffer.size() - bytesLeft).gcount();
-
-	//		len -= bytesSent - bytesRead;
-	//		if (len > 0)
-	//			return true;
-	//		return false;
-	//	});
+	server.addEndpoint("/hello/{name}", Network::HTTP::Request::Method::Get,
+		[](Network::HTTP::Request& req, std::span<std::string_view> params) -> std::unique_ptr<Network::HTTP::Response>
+		{
+			auto response = std::make_unique<Network::HTTP::Response>();
+			response->setVersion("HTTP/1.1");
+			response->setStatusCode(Network::HTTP::Response::StatusCode::Ok);
+			response->setStatusMessage("OK");
+			auto& headers = response->getHeaders();
+			headers.set(Network::HTTP::Message::Headers::Standard::ContentType, "application/json");
+			headers.set(Network::HTTP::Message::Headers::Standard::Server, "RestfulServer");
+			auto body = std::make_unique<Network::HTTP::StringBody>();
+			std::string name = params.size() > 0 ? std::string(params[0]) : "world";
+			auto json = Json::Value{
+				{"message", "Hello, " + name}
+			}.stringify();
+			headers.set(Network::HTTP::Message::Headers::Standard::ContentLength, std::to_string(json.size()));
+			body->write(json.data(), json.size());
+			response->setBody(std::move(body));
+			return response;
+		});
+	server.start();
 
 	return 0;
 }

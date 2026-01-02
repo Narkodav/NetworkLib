@@ -3,26 +3,15 @@
 #include "IOContext.h"
 #include "Session.h"
 
-namespace http
-{
-	class Server
-	{
-    public:
-        using HandlerFunction = std::function<std::unique_ptr<Response>(Request&)>;
+#include "JsonParser/Value.h"
 
-        // handlers could be loaded from a config, might implement later
-        const std::map<Request::Method, HandlerFunction> handlers = {
-            {Request::Method::GET,      [this](Request& req) { return std::move(handleGet(req)); }},
-            {Request::Method::CONNECT,  [this](Request& req) { return std::move(handleConnect(req)); }},
-            {Request::Method::DELETE_,  [this](Request& req) { return std::move(handleDelete(req)); }},
-            {Request::Method::HEAD,     [this](Request& req) { return std::move(handleHead(req)); }},
-            {Request::Method::OPTIONS,  [this](Request& req) { return std::move(handleOptions(req)); }},
-            {Request::Method::PATCH,    [this](Request& req) { return std::move(handlePatch(req)); }},
-            {Request::Method::POST,     [this](Request& req) { return std::move(handlePost(req)); }},
-            {Request::Method::PUT,      [this](Request& req) { return std::move(handlePut(req)); }},
-            {Request::Method::TRACE,    [this](Request& req) { return std::move(handleTrace(req)); }},
-            {Request::Method::UNKNOWN,  [this](Request& req) { return std::move(handleUnknown(req)); }}
-        };
+namespace Network::HTTP
+{
+    class Server
+    {
+    public:
+        using RequestHandlerFunction = std::function<std::unique_ptr<Response>(Request&)>;
+		using ResponseHandlerFunction = std::function<std::unique_ptr<Message>(Response&)>;
 
         static inline const std::map<std::string, std::string> mimeTypes = {
             {".html", "text/html"},
@@ -54,9 +43,9 @@ namespace http
             {".wasm", "application/wasm"},
         };
 
-	private:
-		IOContext& m_context;
-		Acceptor m_acceptor;
+    private:
+        IOContext& m_context;
+        Acceptor m_acceptor;
         std::string m_name;
 
         std::atomic<uint64_t> m_temporaryFileCounter = 0;
@@ -68,41 +57,44 @@ namespace http
         size_t m_totalRequests = 0;
         size_t m_activeSessions = 0;
 
-	public:
-		
-		Server(IOContext& context, int port) :
-			m_context(context), m_acceptor(context, port) {};
+        std::array<RequestHandlerFunction, static_cast<size_t>(Request::Method::Count)> m_handlers = {
+            [this](Request& req) { return std::move(handleGet(req)); },
+            [this](Request& req) { return std::move(handleConnect(req)); },
+            [this](Request& req) { return std::move(handleDelete(req)); },
+            [this](Request& req) { return std::move(handleHead(req)); },
+            [this](Request& req) { return std::move(handleOptions(req)); },
+            [this](Request& req) { return std::move(handlePatch(req)); },
+            [this](Request& req) { return std::move(handlePost(req)); },
+            [this](Request& req) { return std::move(handlePut(req)); },
+            [this](Request& req) { return std::move(handleTrace(req)); },
+            [this](Request& req) { return std::move(handleUnknown(req)); },
+        };
 
-		void startBlocking();
+        ResponseHandlerFunction m_responseHandler =
+            [this](Response& res) { return std::move(handleResponse(res)); };
 
-		void accept();
+    public:
 
-        std::unique_ptr<Body> chooseBodyType(MessagePtr& msg);
+        Server(IOContext& context, int port, std::string_view name) :
+            m_context(context), m_acceptor(context, port), m_name(name) {
+        };
 
-        MessagePtr handleMessage(MessagePtr& msg) {
+        void startBlocking();
 
-            if (msg->getType() == Message::Type::REQUEST)
+        void accept();
+
+        std::unique_ptr<Body> chooseBodyType(std::unique_ptr<Message>& msg);
+
+        std::unique_ptr<Message> handleMessage(std::unique_ptr<Message>& msg) {
+
+            if (msg->getType() == Message::Type::Request)
             {
                 auto& req = static_cast<Request&>(*msg);
-                return handlers.find(req.getMethod())->second(req);
+                return m_handlers[static_cast<size_t>(req.getMethod())](req);
             }
             else
             {
-                auto errorResponse = std::make_unique<Response>();
-                errorResponse->setStatusCode(Response::StatusCode::BAD_REQUEST);
-                errorResponse->setVersion("HTTP/1.1");
-
-                auto& headers = errorResponse->getHeaders();
-                headers.set(Message::Headers::Standard::CONTENT_TYPE, "text/plain");
-                headers.set(Message::Headers::Standard::SERVER, m_name);
-
-                auto body = std::make_unique<StringBody>();
-                std::string text = "Bad Request: Server expects requests, not responses\n";
-                headers.set(Message::Headers::Standard::CONTENT_LENGTH, std::to_string(text.size()));
-                body->write(text.data(), text.size());
-                errorResponse->setBody(std::move(body));
-
-                return errorResponse;
+                return handleResponse(static_cast<Response&>(*msg));
             }
         }
 
@@ -118,7 +110,9 @@ namespace http
         std::unique_ptr<Response> handleTrace(Request& req);
         std::unique_ptr<Response> handleUnknown(Request& req);
 
-        std::string getMimeType(const std::string& path) {
+        std::unique_ptr<Response> handleResponse(Response& req);
+
+        std::string getMimeType(std::string_view path) {
 
             std::string ext = std::filesystem::path(path).extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -131,7 +125,18 @@ namespace http
             return "application/octet-stream";
         }
 
-	};
+        std::string_view getName() const {
+            return m_name;
+        };
+
+        void setHandler(Request::Method method, RequestHandlerFunction handler) {
+            m_handlers[static_cast<size_t>(method)] = handler;
+        };
+
+        void setResponseHandler(ResponseHandlerFunction handler) {
+            m_responseHandler = handler;
+        };
+    };
 }
 
 

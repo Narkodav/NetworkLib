@@ -8,7 +8,7 @@
 class Acceptor
 {
 private:
-	Socket m_acceptSocket;
+	Network::Socket m_acceptSocket;
 
 	IOContext& m_acceptIOContext;
 	int m_port;
@@ -25,7 +25,7 @@ public:
 		m_acceptSocket.close();
 	};
 
-	void asyncAccept(std::function<void(Socket&&)> acceptCallback,
+	void asyncAccept(std::function<void(Network::Socket&&)> acceptCallback,
 		int clientTimeout = 30, bool clientNonBlocking = true)
 	{
 		m_acceptIOContext.post([this,
@@ -33,7 +33,7 @@ public:
 			clientTimeout = clientTimeout,
 			clientNonBlocking = clientNonBlocking]() {
 				try {
-					Socket client(std::move(m_acceptSocket.accept()));
+					Network::Socket client(std::move(m_acceptSocket.accept()));
 					client
 						.setNonBlocking(clientNonBlocking)
 						.setTimeout(std::chrono::seconds(clientTimeout));
@@ -49,10 +49,5 @@ public:
 			});
 		
 	}
-
-
-
-
-
 };
 

@@ -1,9 +1,9 @@
-#include "Receiver.h"
+#include "../include/Receiver.h"
 
-namespace http
+namespace Network::HTTP
 {
 
-    void Receiver::parseFirstLine(std::stringstream& line, MessagePtr& message)
+    void Receiver::parseFirstLine(std::stringstream& line, std::unique_ptr<Message>& message)
     {
         std::string token;
 
@@ -28,7 +28,7 @@ namespace http
             }
             
             auto statusCode = Response::stringToStatusCode(token);
-            if (statusCode == Response::StatusCode::UNKNOWN)
+            if (statusCode == Response::StatusCode::Unknown)
                 throw std::runtime_error("Unknown status code: " + token + "\n");
             response->setStatusCode(statusCode);
 
@@ -56,7 +56,7 @@ namespace http
 
             // Set method
             auto method = Request::stringToMethod(token);
-            if (method == Request::Method::UNKNOWN)
+            if (method == Request::Method::Unknown)
                 throw std::runtime_error("Unknown request method: " + token + "\n");
             request->setMethod(method);
 
@@ -78,7 +78,7 @@ namespace http
         }
     }
 
-    bool Receiver::parseHeaders(std::stringstream& headers, MessagePtr& message)
+    bool Receiver::parseHeaders(std::stringstream& headers, std::unique_ptr<Message>& message)
     {
         std::string header;
         std::string line;
@@ -115,9 +115,9 @@ namespace http
             if (header.empty() || value.empty())
                 throw std::runtime_error("Invalid header: " + header + ":" + value);
 
-            if (header.length() > MAX_HEADER_NAME_LENGTH)
+            if (header.length() > s_maxHeaderNameLength)
                 throw std::runtime_error("Header name too long: " + header);
-            if (value.length() > MAX_HEADER_VALUE_LENGTH)
+            if (value.length() > s_maxHeaderValueLength)
                 throw std::runtime_error("Header value too long: " + value);
 
             // Check header name doesn't contain invalid characters
@@ -144,7 +144,7 @@ namespace http
                 // Append to previous value with a space
                 value += ' ' + continuation;
 
-                if (value.length() > MAX_HEADER_VALUE_LENGTH)
+                if (value.length() > s_maxHeaderValueLength)
                     throw std::runtime_error("Header value too long after folding: " + header);
             }
 
@@ -154,25 +154,25 @@ namespace http
         return false; // No empty line found - incomplete headers
     }
 
-    std::pair<Message::TransferMethod, int> Receiver::determineTransferMethod(MessagePtr& message)
+    std::pair<Message::TransferMethod, int> Receiver::determineTransferMethod(std::unique_ptr<Message>& message)
     {
-        auto value = message->getHeaders().get(Message::Headers::Standard::TRANSFER_ENCODING);
+        auto value = message->getHeaders().get(Message::Headers::Standard::TransferEncoding);
         if (!value.empty()) {
             if (value == "chunked") {
                 return std::make_pair<Message::TransferMethod, int>
-                    (Message::TransferMethod::CHUNKED, 0);
+                    (Message::TransferMethod::Chunked, 0);
             }
 
             // Other transfer encodings are not supported in HTTP/1.1
             throw std::runtime_error("Unsupported Transfer-Encoding: " + value);
         }
-        value = message->getHeaders().get(Message::Headers::Standard::CONTENT_LENGTH);
+        value = message->getHeaders().get(Message::Headers::Standard::ContentLength);
 
         if (!value.empty()) {
             try {
                 size_t length = std::stoull(value);
                 return std::make_pair<Message::TransferMethod, int>
-                    (Message::TransferMethod::CONTENT_LENGTH, length);
+                    (Message::TransferMethod::ContentLength, length);
             }
             catch (const std::exception&) {
                 throw std::runtime_error("Invalid Content-Length: " + value);
@@ -180,10 +180,10 @@ namespace http
         }
 
         return std::make_pair<Message::TransferMethod, int>
-            (Message::TransferMethod::NONE, 0);
+            (Message::TransferMethod::None, 0);
     }
 
-    size_t Receiver::readHeader(Socket& sock, Buffer& leftovers, MessagePtr& message)
+    size_t Receiver::readHeader(Socket& sock, Buffer& leftovers, std::unique_ptr<Message>& message)
     {
         leftovers.resize(1024);
         size_t bytesReadTotal = 0;
@@ -191,13 +191,13 @@ namespace http
         try
         {
             sock.receiveLoop(leftovers.data(),
-                leftovers.size(), 0, MAX_RETRY_COUNT,
+                leftovers.size(), 0, s_maxRetryCount,
                 [&leftovers, &message, &bytesReadTotal]
                 (char*& buffer, size_t& len, size_t bytesRead, size_t& receivedTotal) {
 
-                    if (receivedTotal > MAX_HEADER_SIZE) {
+                    if (receivedTotal > s_maxHeaderSize) {
                         throw std::runtime_error("HTTP header too large (exceeds "
-                            + std::to_string(MAX_HEADER_SIZE / 1024) + "KB limit, received: "
+                            + std::to_string(s_maxHeaderSize / 1024) + "KB limit, received: "
                             + std::to_string(receivedTotal / 1024) + "KB)");
                     }
 
@@ -230,13 +230,13 @@ namespace http
         return bytesReadTotal;
     }
 
-    size_t Receiver::read(Socket& sock, MessagePtr& message)
+    size_t Receiver::read(Socket& sock, std::unique_ptr<Message>& message)
     {
         std::string leftovers;
         size_t bytesRead = 0;
         try
         {
-            MessagePtr message;
+            std::unique_ptr<Message> message;
             bytesRead += readHeader(sock, leftovers, message);
             std::unique_ptr<StringBody> body = std::make_unique<StringBody>();
 
@@ -250,7 +250,7 @@ namespace http
         }
     }
 
-    size_t Receiver::read(Socket& sock, MessagePtr& message, BodyTypeHandler handler)
+    size_t Receiver::read(Socket& sock, std::unique_ptr<Message>& message, BodyTypeHandler handler)
     {
         std::string leftovers;
         size_t bytesRead = 0;
@@ -267,13 +267,13 @@ namespace http
 
             switch (methodAndLength.first)
             {
-            case Message::TransferMethod::CONTENT_LENGTH:
+            case Message::TransferMethod::ContentLength:
                 bytesRead += message->getBody()->readTransferSize
-                (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                (sock, leftovers, methodAndLength.second, s_maxRetryCount, s_maxBodySize);
                 break;
-            case Message::TransferMethod::CHUNKED:
+            case Message::TransferMethod::Chunked:
                 bytesRead += message->getBody()->readChunked
-                (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                (sock, leftovers, s_maxRetryCount, s_maxBodySize);
                 break;
             default:
                 break; //HTTP/1.1 only supports chunked or content length transfer methods
@@ -289,7 +289,7 @@ namespace http
 
 
     void Receiver::asyncRead(IOContext& context,Socket& sock,
-        MessagePtr& message, std::function<void(size_t)> callback)
+        std::unique_ptr<Message>& message, std::function<void(size_t)> callback)
     {
         try
         {
@@ -317,7 +317,7 @@ namespace http
     }
 
     void Receiver::asyncRead(IOContext& context, Socket& sock,
-        MessagePtr& message, BodyTypeHandler handler,
+        std::unique_ptr<Message>& message, BodyTypeHandler handler,
         std::function<void(size_t)> callback)
     {
         try
@@ -325,7 +325,7 @@ namespace http
             context.post([&context, &sock, &message, handler, callback]() {
                 size_t bytesRead = 0;
                 Buffer leftovers;
-                MessagePtr message;
+                std::unique_ptr<Message> message;
 
                 try
                 {
@@ -335,13 +335,13 @@ namespace http
 
                     switch (methodAndLength.first)
                     {
-                    case Message::TransferMethod::CONTENT_LENGTH:
+                    case Message::TransferMethod::ContentLength:
                         bytesRead += message->getBody()->readTransferSize
-                        (sock, leftovers, methodAndLength.second, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                        (sock, leftovers, methodAndLength.second, s_maxRetryCount, s_maxBodySize);
                         break;
-                    case Message::TransferMethod::CHUNKED:
+                    case Message::TransferMethod::Chunked:
                         bytesRead += message->getBody()->readChunked
-                        (sock, leftovers, MAX_RETRY_COUNT, MAX_BODY_SIZE);
+                        (sock, leftovers, s_maxRetryCount, s_maxBodySize);
                         break;
                     default:
                         break; //HTTP/1.1 only supports chunked or content length transfer methods
@@ -362,7 +362,7 @@ namespace http
     }
 
     void Receiver::asyncReadHeader(IOContext& context, Socket& sock,
-        Buffer& leftovers, MessagePtr& message,
+        Buffer& leftovers, std::unique_ptr<Message>& message,
         std::function<void(size_t)> callback)
     {
         try

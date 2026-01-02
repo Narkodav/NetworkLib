@@ -42,13 +42,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -106,7 +106,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>$(ProjectDir)/Vendor/CommonApi/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)/Vendor/CommonApi/include;$(ProjectDir)/Vendor/JsonParser/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -124,8 +124,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)/Vendor/CommonApi/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)/Vendor/CommonApi/include;$(ProjectDir)/Vendor/JsonParser/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -137,28 +139,34 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Acceptor.h" />
-    <ClInclude Include="Body.h" />
-    <ClInclude Include="Common.h" />
-    <ClInclude Include="Message.h" />
-    <ClInclude Include="IOContext.h" />
-    <ClInclude Include="Receiver.h" />
-    <ClInclude Include="Sender.h" />
-    <ClInclude Include="Server.h" />
-    <ClInclude Include="Session.h" />
-    <ClInclude Include="Socket.h" />
+    <ClInclude Include="include\Acceptor.h" />
+    <ClInclude Include="include\Body.h" />
+    <ClInclude Include="include\Common.h" />
+    <ClInclude Include="include\Message.h" />
+    <ClInclude Include="include\IOContext.h" />
+    <ClInclude Include="include\Receiver.h" />
+    <ClInclude Include="include\RestfulServer.h" />
+    <ClInclude Include="include\Sender.h" />
+    <ClInclude Include="include\Server.h" />
+    <ClInclude Include="include\Session.h" />
+    <ClInclude Include="include\Socket.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\Concepts.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\ContainerParser.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\StreamParser.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\StrictContainerParser.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\StrictStreamParser.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\Utils\SIMDUtils.h" />
+    <ClInclude Include="Vendor\JsonParser\include\JsonParser\Value.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Acceptor.cpp" />
-    <ClCompile Include="Body.cpp" />
-    <ClCompile Include="Message.cpp" />
-    <ClCompile Include="IOContext.cpp" />
+    <ClCompile Include="src\Body.cpp" />
+    <ClCompile Include="src\Message.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Receiver.cpp" />
-    <ClCompile Include="Sender.cpp" />
-    <ClCompile Include="Server.cpp" />
-    <ClCompile Include="Session.cpp" />
-    <ClCompile Include="Socket.cpp" />
+    <ClCompile Include="src\Receiver.cpp" />
+    <ClCompile Include="src\RestfulServer.cpp" />
+    <ClCompile Include="src\Sender.cpp" />
+    <ClCompile Include="src\Server.cpp" />
+    <ClCompile Include="src\Socket.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
