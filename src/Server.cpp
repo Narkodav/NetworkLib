@@ -58,19 +58,27 @@ namespace Network::HTTP
         else if (contentType != "")
         {
             if (contentType == "application/json") {
-                //body = std::make_unique<JsonBody>(); //need to implement body type
+                //body = std::make_unique<JsonBody>(); //need to implement json body type
+                std::cerr << "JsonBody not implemented, defaulting to StringBody\n";
+                body = std::make_unique<StringBody>();
             }
             else if (contentType == "text/plain") {
                 body = std::make_unique<StringBody>();
             }
             else if (contentType == "application/x-www-form-urlencoded") {
                 //body = std::make_unique<FormBody>(); //need to implement body type
+				std::cerr << "FormBody not implemented, defaulting to StringBody\n";
+				body = std::make_unique<StringBody>();
             }
             else if (contentType.find("multipart/form-data") != std::string::npos) {
                 //body = std::make_unique<MultipartBody>(); //might be more complex
+                std::cerr << "MultipartBody not implemented, defaulting to StringBody\n";
+                body = std::make_unique<StringBody>();
             }
             else if (contentType == "application/octet-stream") {
                 //body = std::make_unique<BinaryBody>(); //need to implement body type
+                std::cerr << "BinaryBody not implemented, defaulting to StringBody\n";
+                body = std::make_unique<StringBody>();
             }
             else {
                 // Default to string body for unknown types
@@ -305,5 +313,4 @@ namespace Network::HTTP
         resp->setBody(std::move(body));
         return resp;
     }
-
 }

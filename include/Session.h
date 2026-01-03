@@ -31,7 +31,6 @@ namespace Network::HTTP
         ~Session() { m_socket.close(); };
 
         void start() {
-            std::cout << "Session " << m_identifier << " started" << std::endl;
             if (!m_socket.waitForData(std::chrono::seconds(15)))
                 return;
 
@@ -40,22 +39,18 @@ namespace Network::HTTP
                 if (message == nullptr)
                     break;
 
-                std::cout << "Session " << m_identifier << " receiving: " << std::endl;
-                std::cout << message->getFirstLine() << std::endl;
-
                 auto response = m_responseHandler(message);
-
-                std::cout << "Session " << m_identifier << " sending: " << std::endl;
-                std::cout << response->getFirstLine() << std::endl;
-
+                
                 sendResponse(response);
+
                 m_iterationCount++;
 
-                if (message->getHeaders().get(Message::Headers::Standard::Connection) != "keep-alive"
+                if (!Detail::CaseInsensitiveStringComparator()(
+                    message->getHeaders().get(Message::Headers::Standard::Connection),
+                    "keep-alive")
                     || !m_socket.waitForData(std::chrono::seconds(15)))
                     break;
             }
-            std::cout << "Session " << m_identifier << " ended" << std::endl;
         }
 
         void startAssync(IOContext& ioContext, IOContext::SessionCallback&& callback) {

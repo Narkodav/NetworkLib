@@ -40,6 +40,9 @@ namespace Network::HTTP
                 UserAgent,
                 Via,
                 Warning,
+				AccessControlAllowOrigin,
+				AccessControlAllowMethods,
+				AccessControlAllowHeaders,
                 Count
             };
 
@@ -73,7 +76,10 @@ namespace Network::HTTP
 				"Upgrade",
 				"User-Agent",
 				"Via",
-				"Warning"
+				"Warning",
+                "Access-Control-Allow-Origin",
+				"Access-Control-Allow-Methods",
+				"Access-Control-Allow-Headers"
             };
 
             static inline const std::unordered_map<std::string, Standard, 
@@ -107,7 +113,10 @@ namespace Network::HTTP
                 {"upgrade", Standard::Upgrade},
                 {"user-agent", Standard::UserAgent},
                 {"via", Standard::Via},
-                {"warning", Standard::Warning}
+                {"warning", Standard::Warning},
+                {"Access-Control-Allow-Origin", Standard::AccessControlAllowOrigin},
+				{"Access-Control-Allow-Methods", Standard::AccessControlAllowMethods},
+				{"Access-Control-Allow-Headers", Standard::AccessControlAllowHeaders}
             };
 
             class iterator {
@@ -289,6 +298,14 @@ namespace Network::HTTP
                 );
             }
 
+            static std::string standardToString(Standard header) {
+                return s_headerToString[static_cast<size_t>(header)];
+            }
+
+            static Standard stringToStandard(const std::string& header) {
+                auto it = s_headerFromString.find(header);
+                return it != s_headerFromString.end() ? it->second : Standard::Count;
+			}
         };
 
         enum class Type {
@@ -381,7 +398,9 @@ namespace Network::HTTP
         };
 
         static std::string_view methodToString(Method m) {
-            return m < Method::Count ? s_methodToStringMap[static_cast<size_t>(m)] : "UNKNOWN";
+            if (m < Method::Count)
+                return s_methodToStringMap[static_cast<size_t>(m)].c_str();
+            return s_methodToStringMap[static_cast<size_t>(Method::Unknown)];
         };
 
         virtual std::string getFirstLine() const;

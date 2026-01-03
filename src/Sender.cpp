@@ -10,7 +10,6 @@ namespace Network::HTTP
 			headers += header + ": " + value + "\r\n";
 		}
 		headers += "\r\n";
-
 		return sock.sendCommited(headers.data(), headers.size(), s_maxRetryCount);
 	}
 

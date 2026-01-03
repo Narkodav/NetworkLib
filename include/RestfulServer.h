@@ -12,25 +12,36 @@ namespace Network::HTTP
 {
     class RestfulServer
     {
+    public:
+        struct CorsOptions {
+            const std::string allowedOrigins = "*";
+            const std::string allowedMethods = "GET, POST, PUT, DELETE, OPTIONS";
+            const std::string allowedHeaders = "Content-Type";
+		};
+
+    private:
         using Handler = std::function<std::unique_ptr<Response>(Request&,
             std::span<std::string_view>)>;
 
         struct Node {
             std::unordered_map<std::string, Node*, Detail::TransparentStringHash, Detail::TransparentStringEqual> children;
 			Node* parameterChild = nullptr;
-            std::array<Handler, static_cast<size_t>(Request::Method::Count)> handlers;
+            std::array<Handler, static_cast<size_t>(Request::Method::Count)> handlers = { nullptr };
         };
 
-    private:
+
         Server m_core;
 		Node* m_root;
 		IOContext m_ioContext;
+		CorsOptions m_corsOptions;
 
     public:
 
-		RestfulServer(int port, std::string_view name) :
+		RestfulServer(int port, std::string_view name,
+            CorsOptions corsOptions = CorsOptions{}) :
             m_core(m_ioContext, port, name),
-            m_root(nullptr) {
+            m_root(new Node()),
+            m_corsOptions(corsOptions) {
 
             m_core.setHandler(Request::Method::Get, [this](Request& req) { return handleGet(req); });
             m_core.setHandler(Request::Method::Connect, [this](Request& req) { return handleConnect(req); });
@@ -67,22 +78,42 @@ namespace Network::HTTP
         std::unique_ptr<Response> handlePut(Request& req);
         std::unique_ptr<Response> handleTrace(Request& req);
         std::unique_ptr<Response> handleUnknown(Request& req);
+
+        template<typename DefaultHandler>
+        inline std::unique_ptr<Response> handleGeneric(Request& req,
+            Request::Method method, DefaultHandler&& defaultHandler) {
+            Handler handler;
+            std::vector<std::string_view> params;
+            if (findHandler(m_root, req.getUri(), method, handler, params)) {
+                auto resp = handler(req, params);
+                addCORSHeaders(*resp);
+                addSuccessfulHeaders(*resp);
+                return resp;
+            }
+            else {
+                return (this->*defaultHandler)(req, method);
+            }
+        };
         
+        void addCORSHeaders(Response& resp);
+        void addSuccessfulHeaders(Response& resp);
+
         std::string getErrorResponse(std::string_view uri,
             Request::Method method,
             Response::StatusCode code,
 			const std::string_view message);
         std::unique_ptr<Response> createNotFoundResponse(Request& req, Request::Method method);
+        std::unique_ptr<Response> createPreflightCorsResponse(Request& req, Request::Method method);
 
         bool findHandler(Node* node,
             std::string_view path,
             Request::Method method,
             Handler& outHandler,
             std::vector<std::string_view>& outParams) {
-            if (path[0] == '/') path = path.substr(1);
+            if (path[0] != '/') return false;
             while (path != "")
             {
-                auto segment = getPathSegment(path, 0);
+                auto segment = getPathSegment(path, 1);
                 auto it = node->children.find(segment);
                 if (it != node->children.end()) {
                     path = path.substr(segment.length() + 1);
@@ -99,7 +130,7 @@ namespace Network::HTTP
                 }
             }
             outHandler = node->handlers[static_cast<size_t>(method)];
-            return true;
+            return outHandler != nullptr;
 		}
 
         std::string_view getPathSegment(std::string_view path, size_t startPos) {
@@ -111,9 +142,7 @@ namespace Network::HTTP
             return segment;
         }
         
-        void registerHandle(Node*& node, std::string_view path, Request::Method method, Handler&& handler) {            
-            if (node == nullptr) node = new Node();
-
+        void registerHandle(Node* node, std::string_view path, Request::Method method, Handler&& handler) {            
             while (path != "")
             {
                 auto segment = getPathSegment(path, 1);

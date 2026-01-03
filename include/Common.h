@@ -64,29 +64,10 @@ namespace Network::Detail {
 	{
 		using is_transparent = void;
 
-		bool operator()(const std::string& lhs, const std::string& rhs) const
-		{
-			return std::lexicographical_compare(
-				lhs.begin(), lhs.end(),
-				rhs.begin(), rhs.end(),
-				[](char lhs, char rhs) { return std::tolower(lhs) < std::tolower(rhs); }
-			);
-		}
 		bool operator()(std::string_view lhs, std::string_view rhs) const
 		{
-			return std::lexicographical_compare(
-				lhs.begin(), lhs.end(),
-				rhs.begin(), rhs.end(),
-				[](char lhs, char rhs) { return std::tolower(lhs) < std::tolower(rhs); }
-			);
-		}
-		bool operator()(const std::string& lhs, std::string_view rhs) const
-		{
-			return std::lexicographical_compare(
-				lhs.begin(), lhs.end(),
-				rhs.begin(), rhs.end(),
-				[](char lhs, char rhs) { return std::tolower(lhs) < std::tolower(rhs); }
-			);
+			return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin(),
+				[](char a, char b) { return std::tolower(a) == std::tolower(b); });
 		}
 	};
 

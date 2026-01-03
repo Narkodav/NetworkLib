@@ -6,7 +6,7 @@ namespace Network::HTTP
         std::string& leftovers, size_t size, size_t maxRetryCount,
         size_t maxBodySize)
     {
-        size_t bytesRead = leftovers.size() - size;
+        size_t bytesRead = leftovers.size();
 
         if (size > maxBodySize) {
             throw std::runtime_error("Content size exceeds maximum allowed ("
@@ -19,10 +19,13 @@ namespace Network::HTTP
             if (leftovers.size() > size) {
                 throw std::runtime_error("Leftover data size exceeds expected content size");
             }
+            else if (leftovers.size() == size) {
+                m_data = leftovers;
+                return bytesRead;
+            }
             m_data = leftovers;
         }
-
-        m_data.resize(size);
+        else m_data.resize(size);        
 
         try
         {

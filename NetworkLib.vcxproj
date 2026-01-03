@@ -150,6 +150,7 @@
     <ClInclude Include="include\Server.h" />
     <ClInclude Include="include\Session.h" />
     <ClInclude Include="include\Socket.h" />
+    <ClInclude Include="TaskManager.h" />
     <ClInclude Include="Vendor\JsonParser\include\JsonParser\Concepts.h" />
     <ClInclude Include="Vendor\JsonParser\include\JsonParser\ContainerParser.h" />
     <ClInclude Include="Vendor\JsonParser\include\JsonParser\StreamParser.h" />
@@ -167,6 +168,7 @@
     <ClCompile Include="src\Sender.cpp" />
     <ClCompile Include="src\Server.cpp" />
     <ClCompile Include="src\Socket.cpp" />
+    <ClCompile Include="TaskManager.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

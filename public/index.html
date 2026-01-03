@@ -1,34 +1,106 @@
 <!DOCTYPE html>
-<html lang = "en">
-    <head>
-        <title>memes</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta charset="utf-8">
-        <link rel="stylesheet" type="text/css" href="styles.css">
-        <link rel="icon" type="icon/jpg" href="cat.jpg">
-    </head>
-    <body>
-        <form action="/submit-url" method="POST">
-            <input type="text" name="username" placeholder="Enter username">
-            <input type="password" name="password" placeholder="Enter password">
-            <button type="submit">Submit</button>
-        </form>
-        <h1 title="asd"> heading </h1>
-        <p title="asd"> paragraph </p>
-        <img id="cat" title="asd" src="cat.jpg" alt="bebra">
-        <hr>
-        <table width=100%>
-            <caption>memes</caption>
-            <tr>
-                <th>bebra</th>
-                <th>amogus</th>
-                <th>cactus</th>
-            </tr>
-            <tr>
-                <td><a href="https://ru.wikipedia.org/wiki/%D0%91%D0%B5%D0%B1%D1%80%D0%B0_%28%D0%B3%D0%BE%D1%80%D0%BE%D0%B4%29"><img id="bebra" title="bebra" src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Evangelische_Kirche_Bebra.jpg/435px-Evangelische_Kirche_Bebra.jpg" alt="bebra"></a></td>
-                <td>amogus</td>
-                <td>cactus</td>
-            </tr>
-        </table>
-    </body>
+<html>
+<head>
+    <title>Task Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .task { padding: 10px; border: 1px solid #ddd; margin: 5px 0; border-radius: 5px; }
+        .task.completed { background-color: #f0f8f0; text-decoration: line-through; }
+        input, button { padding: 8px; margin: 5px; }
+        button { background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .delete-btn { background-color: #dc3545; }
+        .delete-btn:hover { background-color: #c82333; }
+    </style>
+</head>
+<body>
+    <h1>Task Manager</h1>
+    
+    <div>
+        <input type="text" id="taskInput" placeholder="Enter new task..." />
+        <button onclick="addTask()">Add Task</button>
+    </div>
+    
+    <div id="tasks"></div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/tasks`);
+                const tasks = await response.json();
+                displayTasks(tasks);
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+            }
+        }
+        
+        async function addTask() {
+            const input = document.getElementById('taskInput');
+            const title = input.value.trim();
+            if (!title) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/tasks`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title })
+                });
+                
+                if (response.ok) {
+                    input.value = '';
+                    console.log('Task added, reloading...');
+                    await loadTasks();
+                } else {
+                    console.error('Failed to add task:', response.status);
+                }
+            } catch (error) {
+                console.error('Error adding task:', error);
+            }
+        }
+        
+        async function toggleTask(id) {
+            try {
+                const response = await fetch(`${API_BASE}/tasks/${id}/toggle`, { method: 'PUT' });
+                if (response.ok) {
+                    console.log('Task toggled, reloading...');
+                    await loadTasks();
+                } else {
+                    console.error('Failed to toggle task:', response.status);
+                }
+            } catch (error) {
+                console.error('Error toggling task:', error);
+            }
+        }
+        
+        async function deleteTask(id) {
+            try {
+                const response = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    console.log('Task deleted, reloading...');
+                    await loadTasks();
+                } else {
+                    console.error('Failed to delete task:', response.status);
+                }
+            } catch (error) {
+                console.error('Error deleting task:', error);
+            }
+        }
+        
+        function displayTasks(tasks) {
+            const container = document.getElementById('tasks');
+            container.innerHTML = tasks.map(task => `
+                <div class="task ${task.completed ? 'completed' : ''}">
+                    <span>${task.title}</span>
+                    <button onclick="toggleTask(${task.id})">${task.completed ? 'Undo' : 'Complete'}</button>
+                    <button class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
+                </div>
+            `).join('');
+        }
+        
+        // Load tasks on page load
+        loadTasks();
+    </script>
+</body>
 </html>

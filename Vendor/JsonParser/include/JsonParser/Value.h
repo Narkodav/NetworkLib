@@ -202,17 +202,20 @@ namespace Json
 		std::string stringify(size_t indent = 0) const {
 			switch (m_type) {
 			case Type::Array: {
-				std::string result = std::string(indent, ' ') + "[\n";
 				const auto& arr = *std::get<std::vector<Value>*>(m_value);
-				for (size_t i = 0; i < arr.size(); ++i) {
-					result += arr[i].stringify(indent + 2) + ",\n";
+				if (arr.empty()) return std::string(indent, ' ') + "[]";
+				std::string result = std::string(indent, ' ') + "[\n" +
+					arr[0].stringify(indent + 2);
+				
+				for (size_t i = 1; i < static_cast<int64_t>(arr.size()); ++i) {
+					result += ",\n" + arr[i].stringify(indent + 2);
 				}
-				result += std::string(indent, ' ') + "]";
+				result += "\n" + std::string(indent, ' ') + "]";
 				return result;
 			}
 			case Type::Object: {
-				std::string result = std::string(indent, ' ') + "{\n";
 				const auto& map = *std::get<std::unordered_map<std::string, Value>*>(m_value);
+				std::string result = std::string(indent, ' ') + "{\n";				
 				for (const auto& [key, val] : map) {
 					if (val.m_type == Type::Array || val.m_type == Type::Object)
 						result += std::string(indent + 2, ' ') + "\"" + key + "\":\n"
@@ -220,9 +223,59 @@ namespace Json
 					else result += std::string(indent + 2, ' ') + "\"" + key + "\": "
 						+ val.stringify() + ",\n";
 				}
+				if (!map.empty())
+				{
+					result.pop_back();
+					result.pop_back();
+					result += "\n";
+				}
 				result += std::string(indent, ' ') + "}";
 				return result;
 			}				
+			case Type::String:
+				return std::string(indent, ' ') + "\"" + *std::get<std::string*>(m_value) + "\"";
+			case Type::Bool:
+				return std::string(indent, ' ') + (std::get<bool>(m_value) ? "true" : "false");
+			case Type::Integer:
+				return std::string(indent, ' ') + std::to_string(std::get<int64_t>(m_value));
+			case Type::Number:
+				return std::string(indent, ' ') + std::to_string(std::get<double>(m_value));
+			case Type::Null:
+				return std::string(indent, ' ') + "null";
+			default:
+				throw std::runtime_error("Unknown type");
+			}
+		}
+
+		std::string stringifyLean(size_t indent = 0) const {
+			switch (m_type) {
+			case Type::Array: {
+				const auto& arr = *std::get<std::vector<Value>*>(m_value);
+				if (arr.empty()) return std::string(indent, ' ') + "[]";
+				std::string result = std::string(indent, ' ') + "[" +
+					arr[0].stringify(indent + 2);
+
+				for (size_t i = 1; i < static_cast<int64_t>(arr.size()); ++i) {
+					result += "," + arr[i].stringify(indent + 2);
+				}
+				result += std::string(indent, ' ') + "]";
+				return result;
+			}
+			case Type::Object: {
+				const auto& map = *std::get<std::unordered_map<std::string, Value>*>(m_value);
+				std::string result = std::string(indent, ' ') + "{";
+				for (const auto& [key, val] : map) {
+					if (val.m_type == Type::Array || val.m_type == Type::Object)
+						result += std::string(indent + 2, ' ') + "\"" + key + "\":"
+						+ val.stringify(indent + 2) + ",";
+					else result += std::string(indent + 2, ' ') + "\"" + key + "\": "
+						+ val.stringify() + ",";
+				}
+				if (!map.empty())
+					result.pop_back();
+				result += std::string(indent, ' ') + "}";
+				return result;
+			}
 			case Type::String:
 				return std::string(indent, ' ') + "\"" + *std::get<std::string*>(m_value) + "\"";
 			case Type::Bool:

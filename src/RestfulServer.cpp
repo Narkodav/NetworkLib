@@ -26,70 +26,54 @@ namespace Network::HTTP
 		headers.set(Message::Headers::Standard::ContentLength, std::to_string(json.size()));
 		body->write(json.data(), json.size());
 		resp->setBody(std::move(body));
+		addCORSHeaders(*resp);
+		return resp;
+	}
+
+	std::unique_ptr<Response> RestfulServer::createPreflightCorsResponse(Request& req, Request::Method method)
+	{
+		auto resp = std::make_unique<Response>();		
+		addCORSHeaders(*resp);
+		addSuccessfulHeaders(*resp);
+		auto& headers = resp->getHeaders();
+		headers.set(Message::Headers::Standard::ContentLength, "0");
 		return resp;
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleGet(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Get, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Get);
+		return handleGeneric(req, Request::Method::Get, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleConnect(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Connect, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Connect);
+		return handleGeneric(req, Request::Method::Connect, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleDelete(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Delete, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Delete);
+		return handleGeneric(req, Request::Method::Delete, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleHead(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Head, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Head);
+		return handleGeneric(req, Request::Method::Head, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleOptions(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Options, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Options);
+		return handleGeneric(req, Request::Method::Options, &RestfulServer::createPreflightCorsResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handlePatch(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Patch, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Patch);
+		return handleGeneric(req, Request::Method::Patch, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handlePost(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Post, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Post);
+		return handleGeneric(req, Request::Method::Post, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handlePut(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Put, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Put);
+		return handleGeneric(req, Request::Method::Put, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleTrace(Request& req) {
-		Handler handler;
-		std::vector<std::string_view> params;
-		if(findHandler(m_root, req.getUri(), Request::Method::Trace, handler, params)) return handler(req, params);
-		return createNotFoundResponse(req, Request::Method::Trace);
+		return handleGeneric(req, Request::Method::Trace, &RestfulServer::createNotFoundResponse);
 	}
 
 	std::unique_ptr<Response> RestfulServer::handleUnknown(Request& req) {
@@ -105,6 +89,22 @@ namespace Network::HTTP
 		headers.set(Message::Headers::Standard::ContentLength, std::to_string(json.size()));
 		body->write(json.data(), json.size());
 		resp->setBody(std::move(body));
+		addCORSHeaders(*resp);
 		return resp;
+	}
+
+	void RestfulServer::addCORSHeaders(Response& resp) {
+		auto& headers = resp.getHeaders();
+		headers.set(Message::Headers::Standard::AccessControlAllowOrigin, m_corsOptions.allowedOrigins);
+		headers.set(Message::Headers::Standard::AccessControlAllowMethods, m_corsOptions.allowedMethods);
+		headers.set(Message::Headers::Standard::AccessControlAllowHeaders, m_corsOptions.allowedHeaders);
+	}
+
+	void RestfulServer::addSuccessfulHeaders(Response& resp) {
+		resp.setVersion("HTTP/1.1");
+		resp.setStatusCode(Network::HTTP::Response::StatusCode::Ok);
+		resp.setStatusMessage("OK");
+		auto& headers = resp.getHeaders();
+		headers.set(Message::Headers::Standard::Server, m_core.getName());
 	}
 }

@@ -168,7 +168,7 @@ namespace Network::HTTP
         }
         value = message->getHeaders().get(Message::Headers::Standard::ContentLength);
 
-        if (!value.empty()) {
+        if (!value.empty() && value != "0") {
             try {
                 size_t length = std::stoull(value);
                 return std::make_pair<Message::TransferMethod, int>
@@ -214,7 +214,7 @@ namespace Network::HTTP
                     bytesReadTotal = receivedTotal;
                     std::stringstream ss(leftovers.substr(0, headerEnd + 4));
                     leftovers.erase(0, headerEnd + 4);
-                    leftovers.shrink_to_fit();
+                    leftovers.resize(bytesReadTotal - headerEnd - 4);
 
                     parseFirstLine(ss, message);
                     parseHeaders(ss, message);
@@ -258,7 +258,6 @@ namespace Network::HTTP
         try
         {
             bytesRead += readHeader(sock, leftovers, message);
-            std::cout << "Bytes read: " << bytesRead << std::endl;
             if (message == nullptr)
                 return 0;
 
